@@ -1,0 +1,44 @@
+[project]
+name = "cacasn"
+version = "0.3.0"
+description = "Supernova hunter for the public ZTF alert stream (ALeRCE) with a Transient Name Server check"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Louis Perner" }]
+requires-python = ">=3.9"
+dependencies = ["structlog>=24"]
+
+[project.optional-dependencies]
+sentry = ["sentry-sdk>=2"]
+experimentos = ["numpy>=1.20", "scipy>=1.7"]
+
+[project.scripts]
+cacasn = "caca_sn.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/louisperner/CacaSN"
+
+[dependency-groups]
+dev = ["ruff>=0.6", "mypy>=1.11", "pip-audit>=2.7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["caca_sn"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E741"]  # `l` como nome de linha de catálogo é o costume aqui
+
+[tool.mypy]
+python_version = "3.10"  # o mypy atual não confere 3.9; o CI testa em 3.9
+files = ["caca_sn"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true

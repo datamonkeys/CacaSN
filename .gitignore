@@ -6,3 +6,8 @@ avisados.json
 cache/
 cacasn.log
 *.tmp
+.venv/
+.venv-ci/
+*.egg-info/
+build/
+.env
