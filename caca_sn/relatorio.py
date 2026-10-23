@@ -13,7 +13,7 @@ padding:10px;margin:8px 0}
 .c img{height:120px;width:120px;image-rendering:pixelated;border-radius:4px;background:#000}
 .n{font-size:28px;font-weight:700;min-width:70px;text-align:center}a{color:#7cf}small{color:#999}
 .novo{color:#5f5;font-weight:700}.velho{color:#999}</style>
-<h1>CacaSN — candidatos a supernova</h1>
+<h1>CacaSN — candidatos a supernova (ZTF e Rubin)</h1>
 <p><small>Alertas do ZTF via ALeRCE. Recortes: ciência · referência · diferença.
 Curva: g verde, r vermelho, mais alto = mais brilhante.
 Para reportar, o candidato precisa NÃO estar no TNS; veja o README.</small></p>"""
@@ -58,7 +58,8 @@ def cartao(it: dict[str, Any]) -> str:
         f"<small>{html.escape(', '.join(it['motivos']))}</small><br>"
         f'<span class="{cls}">{html.escape(it["conhecido"])}</span><br>'
         f"<small>RA {ra:.5f} Dec {dec:+.5f}</small> · "
-        f'<a href="https://alerce.online/object/{it["oid"]}" target="_blank">ALeRCE</a> · '
+        f'<a href="{html.escape(it.get("link") or "https://alerce.online/object/" + it["oid"])}" target="_blank">'
+        f"{'Fink' if it.get('fonte') == 'rubin' else 'ALeRCE'}</a> · "
         f'<a href="{tns}" target="_blank">TNS</a> · '
         f'<a href="{galaxia}" target="_blank">galáxia</a>'
         f"</div></div>"

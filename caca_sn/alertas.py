@@ -16,6 +16,15 @@ from .registro import obter
 AVISO = 18.0
 
 
+def corte(item: dict[str, Any]) -> float:
+    """O Rubin tem escala de nota própria (ver caca_sn/rubin.py)."""
+    if item.get("fonte") == "rubin":
+        from .rubin import AVISO as AVISO_RUBIN
+
+        return AVISO_RUBIN
+    return AVISO
+
+
 def notificar(titulo: str, texto: str, relatorio: str) -> None:
     """Notificação do macOS; em outros sistemas vai para o log."""
     obter().warning("alerta", titulo=titulo, texto=texto)
@@ -31,7 +40,7 @@ def avisar_novos(itens: list[dict[str, Any]], pasta: str) -> list[dict[str, Any]
     """Avisa uma vez por objeto; devolve os que foram avisados agora."""
     caminho = os.path.join(pasta, "avisados.json")
     vistos = set(ler_json(caminho, []))
-    novos = [i for i in itens if i["conhecido"].startswith("NÃO") and i["nota"] >= AVISO and i["oid"] not in vistos]
+    novos = [i for i in itens if i["conhecido"].startswith("NÃO") and i["nota"] >= corte(i) and i["oid"] not in vistos]
     if not novos:
         return []
     vistos.update(i["oid"] for i in novos)
