@@ -115,6 +115,21 @@ def avaliar(obj, tns):
     distnr = min([d.get("distnr") or 99 for d in dets] or [99])
 
     motivos, nota = [], obj["probability"] * 10
+    # classificador novo da ALeRCE: separa melhor SN de núcleo ativo (AUC 0.79
+    # contra 0.71 do antigo, medido contra o que foi parar no TNS)
+    try:
+        novo = {p["class_name"]: p["probability"] for p in get_json(f"{API}/objects/{oid}/probabilities")
+                if p["classifier_name"] == "stamp_classifier_2025_beta"}
+    except Exception:
+        novo = {}
+    nota += 10 * novo.get("SN", 0) - 5 * novo.get("AGN", 0)
+    if novo:
+        top = max(novo, key=novo.get)
+        motivos.append(f"classif. 2025: {top} {novo[top]:.2f}")
+    # muito mais detecções no histórico que no alerta = fonte antiga variando
+    hist = int(obj.get("ndethist") or 0)
+    if hist > len(dets) + 5:
+        nota -= 5; motivos.append(f"{hist} detecções no histórico (fonte antiga)")
     nota += 5 * drb
     if noites >= 2:
         nota += 3; motivos.append(f"{noites} noites")  # asteroide não volta no mesmo lugar
@@ -214,6 +229,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=float, default=3, help="primeira detecção há no máximo N dias")
     ap.add_argument("--prob", type=float, default=0.5, help="probabilidade mínima de SN no stamp classifier")
+    ap.add_argument("--avisar", action="store_true",
+                    help=f"notificação do macOS para candidato fora do TNS com nota >= {AVISO}")
     args = ap.parse_args()
     tns = tns_carregar()
     objs = candidatos(args.dias, args.prob)
@@ -224,7 +241,29 @@ def main():
         print(f'  {it["nota"]:6.2f} {it["oid"]} mag {it["mag"]:.1f} {", ".join(it["motivos"])} | {it["conhecido"]}', file=sys.stderr)
     json.dump(itens, open(os.path.join(AQUI, "resultados.json"), "w"), indent=1)
     open(os.path.join(AQUI, "report.html"), "w").write(relatorio(itens))
+    if args.avisar:
+        avisar_novos(itens)
     print(os.path.join(AQUI, "report.html"))
+
+
+# 60% do que os grupos profissionais reportaram passa de 18; nenhum candidato
+# falso da varredura de 23/10/2026 passou
+AVISO = 18.0
+
+
+def avisar_novos(itens):
+    import subprocess
+    caminho = os.path.join(AQUI, "avisados.json")
+    vistos = set(json.load(open(caminho))) if os.path.exists(caminho) else set()
+    novos = [i for i in itens if i["conhecido"].startswith("NÃO") and i["nota"] >= AVISO and i["oid"] not in vistos]
+    if not novos:
+        return
+    vistos.update(i["oid"] for i in novos)
+    json.dump(sorted(vistos), open(caminho, "w"))
+    melhor = max(novos, key=lambda i: i["nota"])
+    texto = f"{len(novos)} candidato(s) fora do TNS. Melhor: {melhor['oid']} nota {melhor['nota']}"
+    subprocess.run(["osascript", "-e", f'display notification {json.dumps(texto)} with title "CacaSN: reporte já!" sound name "Glass"'])
+    subprocess.run(["open", os.path.join(AQUI, "report.html")])
 
 
 if __name__ == "__main__":

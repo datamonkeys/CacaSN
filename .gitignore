@@ -2,3 +2,5 @@ tns.json
 report.html
 resultados.json
 __pycache__/
+avisados.json
+cache/
