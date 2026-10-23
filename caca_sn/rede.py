@@ -24,7 +24,7 @@ def abrir(url: str, timeout: float = 60, tentativas: int = 4) -> bytes:
             if i == tentativas - 1:
                 raise
             time.sleep(2**i)
-    raise AssertionError("inalcançável")
+    raise ValueError("tentativas precisa ser >= 1")
 
 
 def get_json(url: str, tentativas: int = 4) -> Any:

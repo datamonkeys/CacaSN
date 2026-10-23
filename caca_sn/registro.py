@@ -26,6 +26,8 @@ structlog: Any = _carregar("structlog")
 
 NOME = "cacasn"
 _configurado = False
+# biblioteca quieta até alguém chamar configurar()
+logging.getLogger(NOME).addHandler(logging.NullHandler())
 
 
 class _Json(logging.Formatter):
