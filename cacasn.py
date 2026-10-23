@@ -8,7 +8,7 @@ ciência/referência/diferença e a curva de brilho.
 
 uso: python3 cacasn.py [--dias 3] [--prob 0.5]
 """
-import argparse, html, json, os, sys, time, urllib.parse, urllib.request
+import argparse, html, json, os, sys, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 API = "https://api.alerce.online/ztf/v1"
@@ -69,17 +69,35 @@ def tns_carregar():
     return json.load(open(p)) if os.path.exists(p) else None
 
 
-def tns_busca(cfg, ra, dec):
-    """Objetos do TNS a até 3" (precisa de um bot do TNS: tns.json)."""
+_tns_trava = __import__("threading").Lock()
+_tns_ultima = [0.0]
+
+
+def tns_busca(cfg, ra, dec, tentativas=4):
+    """Objetos do TNS a até 3" (precisa de um bot do TNS: tns.json).
+    A busca por região aceita 10 por minuto: uma por vez, a cada 6.5 s, e
+    no 429 espera o tempo que o cabeçalho manda."""
     marker = json.dumps({"tns_id": cfg["bot_id"], "type": "bot", "name": cfg["bot_name"]})
     dados = urllib.parse.urlencode({"api_key": cfg["api_key"],
                                     "data": json.dumps({"ra": f"{ra:.6f}", "dec": f"{dec:.6f}",
                                                         "radius": "3", "units": "arcsec"})}).encode()
-    req = urllib.request.Request("https://www.wis-tns.org/api/get/search", data=dados,
-                                 headers={"User-Agent": "tns_marker" + marker})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        resp = json.load(r)
-    return [f'{o.get("prefix", "")} {o["objname"]}'.strip() for o in resp.get("data", [])]
+    for i in range(tentativas):
+        with _tns_trava:
+            espera = 6.5 - (time.time() - _tns_ultima[0])
+            if espera > 0:
+                time.sleep(espera)
+            try:
+                req = urllib.request.Request("https://www.wis-tns.org/api/get/search", data=dados,
+                                             headers={"User-Agent": "tns_marker" + marker})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    resp = json.load(r)
+                return [f'{o.get("prefix", "")} {o["objname"]}'.strip() for o in resp.get("data", [])]
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or i == tentativas - 1:
+                    raise
+                time.sleep(int(e.headers.get("x-cone-rate-limit-reset", "30")) + 1)
+            finally:
+                _tns_ultima[0] = time.time()
 
 
 # --- avaliação -------------------------------------------------------------
