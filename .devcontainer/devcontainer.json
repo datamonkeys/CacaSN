@@ -1,0 +1,7 @@
+{
+  "name": "CacaSN",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": { "ghcr.io/va-h/devcontainers-features/uv:1": {} },
+  "postCreateCommand": "uv sync --all-extras",
+  "customizations": { "vscode": { "extensions": ["charliermarsh.ruff", "ms-python.mypy-type-checker"] } }
+}
