@@ -6,18 +6,24 @@ descarta o que parece estrela variável ou artefato, confere no TNS se já foi
 reportado (precisa de chave, ver README) e gera report.html com os recortes
 ciência/referência/diferença e a curva de brilho.
 
-uso: python3 cacasn.py [--dias 3] [--prob 0.5]
+uso: python3 cacasn.py [--dias 3] [--prob 0.5] [--avisar]
 """
-import argparse, html, json, os, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, html, json, os, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 API = "https://api.alerce.online/ztf/v1"
 STAMP = "https://avro.alerce.online/get_stamp"
 AQUI = os.path.dirname(os.path.abspath(__file__))
-HDR = {"User-Agent": "CacaSN/0.1"}
+REPO = "https://github.com/louisperner/CacaSN"
+HDR = {"User-Agent": f"CacaSN/0.2 (+{REPO})"}
+
+# 60% do que os grupos profissionais reportaram passa de 18; nenhum candidato
+# falso da varredura de 23/10/2026 passou
+AVISO = 18.0
 
 
-def get_json(url, tentativas=3):
+def get_json(url, tentativas=4):
+    """GET com novas tentativas e espera crescente (1, 2, 4 s)."""
     for i in range(tentativas):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=60) as r:
@@ -25,7 +31,29 @@ def get_json(url, tentativas=3):
         except Exception:
             if i == tentativas - 1:
                 raise
-            time.sleep(2)
+            time.sleep(2 ** i)
+
+
+def gravar_json(caminho, dados, **kw):
+    """Grava em arquivo temporário e troca no fim: um crash não corrompe o anterior."""
+    tmp = caminho + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(dados, f, **kw)
+    os.replace(tmp, caminho)
+
+
+def ler_json(caminho, padrao):
+    try:
+        with open(caminho) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return padrao
+
+
+def registrar(msg):
+    """Uma linha por rodada em cacasn.log (útil quando roda agendado)."""
+    with open(os.path.join(AQUI, "cacasn.log"), "a") as f:
+        f.write(time.strftime("%Y-%m-%d %H:%M ") + msg + "\n")
 
 
 def mjd_agora():
@@ -36,26 +64,36 @@ def candidatos(dias, prob):
     q = urllib.parse.urlencode(dict(classifier="stamp_classifier", **{"class": "SN"}, probability=prob,
                                     firstmjd=f"{mjd_agora() - dias:.3f}", page_size=500,
                                     order_by="probability", order_mode="DESC"))
-    return get_json(f"{API}/objects/?{q}")["items"]
+    return get_json(f"{API}/objects/?{q}").get("items", [])
 
 
 # --- já é conhecido? ------------------------------------------------------
 
 def vizier(fonte, ra, dec, raio, cols):
+    """Linhas do catálogo perto da posição, ou None se o VizieR não respondeu."""
     url = (f"https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source={fonte}&-c={ra:.6f}%20{dec:+.6f}"
            f"&-c.rs={raio}&-out={cols}&-out.max=5&-sort=_r")
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=30) as r:
-            linhas = [l.split("\t") for l in r.read().decode().splitlines() if l and not l.startswith("#")]
-        return [l for l in linhas[3:] if len(l) == len(cols.split(","))]
-    except Exception:
-        return None
+    for i in range(3):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=30) as r:
+                linhas = [l.split("\t") for l in r.read().decode().splitlines() if l and not l.startswith("#")]
+            return [l for l in linhas[3:] if len(l) == len(cols.split(","))]
+        except Exception:
+            time.sleep(2 ** i)
+    return None
+
+
+SEM_RESPOSTA = object()
 
 
 def estrela_gaia(ra, dec):
     """Estrela do Gaia com paralaxe ou movimento significativo em 1.5": a
-    'supernova' quase certamente é a estrela variando de brilho."""
-    for src, plx, eplx, pmra, pmde in vizier("I/355/gaiadr3", ra, dec, 1.5, "Source,Plx,e_Plx,pmRA,pmDE") or []:
+    'supernova' quase certamente é a estrela variando de brilho.
+    Devolve o id da estrela, None, ou SEM_RESPOSTA se o catálogo falhou."""
+    linhas = vizier("I/355/gaiadr3", ra, dec, 1.5, "Source,Plx,e_Plx,pmRA,pmDE")
+    if linhas is None:
+        return SEM_RESPOSTA
+    for src, plx, eplx, pmra, pmde in linhas:
         try:
             if float(plx) > 3 * float(eplx) or (float(pmra) ** 2 + float(pmde) ** 2) ** 0.5 > 5:
                 return src.strip()
@@ -65,18 +103,17 @@ def estrela_gaia(ra, dec):
 
 
 def tns_carregar():
-    p = os.path.join(AQUI, "tns.json")
-    return json.load(open(p)) if os.path.exists(p) else None
+    return ler_json(os.path.join(AQUI, "tns.json"), None)
 
 
-_tns_trava = __import__("threading").Lock()
+_tns_trava = threading.Lock()
 _tns_ultima = [0.0]
 
 
 def tns_busca(cfg, ra, dec, tentativas=4):
     """Objetos do TNS a até 3" (precisa de um bot do TNS: tns.json).
-    A busca por região aceita 10 por minuto: uma por vez, a cada 6.5 s, e
-    no 429 espera o tempo que o cabeçalho manda."""
+    A busca por região aceita 10 por minuto: uma por vez, a cada 6.5 s; no
+    429 espera o tempo que o cabeçalho manda, em erro de rede espera e tenta de novo."""
     marker = json.dumps({"tns_id": cfg["bot_id"], "type": "bot", "name": cfg["bot_name"]})
     dados = urllib.parse.urlencode({"api_key": cfg["api_key"],
                                     "data": json.dumps({"ra": f"{ra:.6f}", "dec": f"{dec:.6f}",
@@ -96,23 +133,38 @@ def tns_busca(cfg, ra, dec, tentativas=4):
                 if e.code != 429 or i == tentativas - 1:
                     raise
                 time.sleep(int(e.headers.get("x-cone-rate-limit-reset", "30")) + 1)
+            except urllib.error.URLError:
+                if i == tentativas - 1:
+                    raise
+                time.sleep(2 ** (i + 1))
             finally:
                 _tns_ultima[0] = time.time()
 
 
 # --- avaliação -------------------------------------------------------------
 
+def subindo_de_brilho(dets):
+    """Brilho subindo em algum filtro: compara só pontos do mesmo filtro, porque
+    g e r têm magnitudes diferentes e misturar os dois inventa subida."""
+    for fid in {d["fid"] for d in dets}:
+        f = sorted((d for d in dets if d["fid"] == fid), key=lambda d: d["mjd"])
+        if len(f) >= 2 and f[-1]["magpsf"] < f[0]["magpsf"] - 0.1:
+            return True
+    return False
+
+
 def avaliar(obj, tns):
     oid = obj["oid"]
-    dets = get_json(f"{API}/objects/{oid}/detections")
-    dets = [d for d in dets if d.get("isdiffpos", 1) in (1, "t")]
+    dets = get_json(f"{API}/objects/{oid}/detections") or []
+    dets = [d for d in dets if d.get("isdiffpos", 1) in (1, "t") and d.get("magpsf") is not None]
+    if not dets:
+        return None  # só detecções negativas (o objeto ficou mais fraco): não é candidato
     ra, dec = obj["meanra"], obj["meandec"]
-    drb = max([d.get("drb") or 0 for d in dets] or [0])
+    drb = max(d.get("drb") or 0 for d in dets)
     noites = len({int(d["mjd"]) for d in dets})
     filtros = len({d["fid"] for d in dets})
     mags = sorted(dets, key=lambda d: d["mjd"])
-    subindo = len(mags) >= 2 and mags[-1]["magpsf"] < mags[0]["magpsf"] - 0.1
-    distnr = min([d.get("distnr") or 99 for d in dets] or [99])
+    distnr = min(d.get("distnr") or 99 for d in dets)
 
     motivos, nota = [], obj["probability"] * 10
     # classificador novo da ALeRCE: separa melhor SN de núcleo ativo (AUC 0.79
@@ -139,17 +191,18 @@ def avaliar(obj, tns):
         nota -= 3; motivos.append("detecção única")
     if filtros >= 2:
         nota += 1; motivos.append("g e r")
-    if subindo:
+    if subindo_de_brilho(dets):
         nota += 2; motivos.append("subindo de brilho")
     if obj.get("stellar"):
         nota -= 4; motivos.append("ALeRCE acha que é estelar")
     gaia = estrela_gaia(ra, dec)
-    if gaia:
+    if gaia is SEM_RESPOSTA:
+        motivos.append("Gaia não respondeu (estrela não descartada)")
+    elif gaia:
         nota -= 8; motivos.append(f"em cima da estrela Gaia {gaia} (variável?)")
     if distnr < 0.5:
         motivos.append("no centro de uma fonte (núcleo de galáxia ou estrela)")
 
-    conhecido = None
     if tns:
         try:
             nomes = tns_busca(tns, ra, dec)
@@ -167,14 +220,14 @@ def avaliar(obj, tns):
     curva = [(round(d["mjd"] - mags[0]["mjd"], 2), d["fid"], round(d["magpsf"], 2)) for d in mags]
     return dict(oid=oid, ra=ra, dec=dec, nota=round(nota, 2), prob=round(obj["probability"], 2),
                 drb=round(drb, 3), motivos=motivos, conhecido=conhecido, stamps=stamps, curva=curva,
-                idade=round(mjd_agora() - obj["firstmjd"], 2), mag=mags[-1]["magpsf"] if mags else None)
+                idade=round(mjd_agora() - obj["firstmjd"], 2), mag=mags[-1]["magpsf"])
 
 
 def _seguro(obj, tns):
     try:
         return avaliar(obj, tns)
     except Exception as e:
-        print(f"  erro em {obj['oid']}: {e}", file=sys.stderr)
+        print(f"  erro em {obj.get('oid')}: {e}", file=sys.stderr)
         return None
 
 
@@ -186,7 +239,7 @@ def mini_curva(curva):
         return ""
     W, H, m = 220, 90, 8
     ts = [c[0] for c in curva]; ms = [c[2] for c in curva]
-    t0, t1 = min(ts), max(ts) or 1
+    t0, t1 = min(ts), max(ts)
     m0, m1 = min(ms) - 0.2, max(ms) + 0.2
     pts = []
     for t, f, mg in curva:
@@ -210,7 +263,8 @@ def relatorio(itens):
 <p><small>Alertas do ZTF via ALeRCE. Recortes: ciência · referência · diferença. Curva: g verde, r vermelho, mais alto = mais brilhante.
 Para reportar, o candidato precisa NÃO estar no TNS; veja o README.</small></p>"""]
     for it in sorted(itens, key=lambda x: -x["nota"]):
-        imgs = "".join(f'<img src="{it["stamps"][t]}" loading="lazy" title="{t}">' for t in ("science", "template", "difference") if t in it["stamps"])
+        imgs = "".join(f'<img src="{html.escape(it["stamps"][t])}" loading="lazy" title="{t}">'
+                       for t in ("science", "template", "difference") if t in it["stamps"])
         cls = "novo" if it["conhecido"].startswith("NÃO") else "velho"
         p.append(
             f'<div class="c"><div class="n">{it["nota"]}</div>{imgs}{mini_curva(it["curva"])}<div>'
@@ -219,18 +273,40 @@ Para reportar, o candidato precisa NÃO estar no TNS; veja o README.</small></p>
             f'<span class="{cls}">{html.escape(it["conhecido"])}</span><br>'
             f'<small>RA {it["ra"]:.5f} Dec {it["dec"]:+.5f}</small> · '
             f'<a href="https://alerce.online/object/{it["oid"]}" target="_blank">ALeRCE</a> · '
-            f'<a href="https://www.wis-tns.org/search?ra={it["ra"]:.5f}&decl={it["dec"]:.5f}&radius=5&coords_unit=arcsec" target="_blank">TNS</a> · '
-            f'<a href="https://legacysurvey.org/viewer?ra={it["ra"]:.5f}&dec={it["dec"]:.5f}&layer=ls-dr10&zoom=16&mark={it["ra"]:.5f},{it["dec"]:.5f}" target="_blank">galáxia</a>'
+            f'<a href="https://www.wis-tns.org/search?ra={it["ra"]:.5f}&amp;decl={it["dec"]:.5f}&amp;radius=5&amp;coords_unit=arcsec" target="_blank">TNS</a> · '
+            f'<a href="https://legacysurvey.org/viewer?ra={it["ra"]:.5f}&amp;dec={it["dec"]:.5f}&amp;layer=ls-dr10&amp;zoom=16&amp;mark={it["ra"]:.5f},{it["dec"]:.5f}" target="_blank">galáxia</a>'
             f'</div></div>')
     return "\n".join(p)
 
 
+def notificar(titulo, texto):
+    """Notificação do macOS; em outros sistemas só imprime."""
+    if sys.platform == "darwin":
+        subprocess.run(["osascript", "-e", f"display notification {json.dumps(texto)} "
+                        f"with title {json.dumps(titulo)} sound name \"Glass\""], check=False)
+        subprocess.run(["open", os.path.join(AQUI, "report.html")], check=False)
+    else:
+        print(f"*** {titulo}: {texto}", file=sys.stderr)
+
+
+def avisar_novos(itens):
+    caminho = os.path.join(AQUI, "avisados.json")
+    vistos = set(ler_json(caminho, []))
+    novos = [i for i in itens if i["conhecido"].startswith("NÃO") and i["nota"] >= AVISO and i["oid"] not in vistos]
+    if not novos:
+        return
+    vistos.update(i["oid"] for i in novos)
+    gravar_json(caminho, sorted(vistos))
+    melhor = max(novos, key=lambda i: i["nota"])
+    notificar("CacaSN: reporte já!", f"{len(novos)} candidato(s) fora do TNS. Melhor: {melhor['oid']} nota {melhor['nota']}")
+
+
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Caçador de supernovas nos alertas do ZTF (ALeRCE + TNS).")
     ap.add_argument("--dias", type=float, default=3, help="primeira detecção há no máximo N dias")
     ap.add_argument("--prob", type=float, default=0.5, help="probabilidade mínima de SN no stamp classifier")
     ap.add_argument("--avisar", action="store_true",
-                    help=f"notificação do macOS para candidato fora do TNS com nota >= {AVISO}")
+                    help=f"notifica candidato fora do TNS com nota >= {AVISO}")
     args = ap.parse_args()
     tns = tns_carregar()
     objs = candidatos(args.dias, args.prob)
@@ -239,31 +315,17 @@ def main():
         itens = [r for r in ex.map(lambda o: _seguro(o, tns), objs) if r]
     for it in sorted(itens, key=lambda x: -x["nota"])[:5]:
         print(f'  {it["nota"]:6.2f} {it["oid"]} mag {it["mag"]:.1f} {", ".join(it["motivos"])} | {it["conhecido"]}', file=sys.stderr)
-    json.dump(itens, open(os.path.join(AQUI, "resultados.json"), "w"), indent=1)
-    open(os.path.join(AQUI, "report.html"), "w").write(relatorio(itens))
+    gravar_json(os.path.join(AQUI, "resultados.json"), itens, indent=1)
+    tmp = os.path.join(AQUI, "report.html.tmp")
+    with open(tmp, "w") as f:
+        f.write(relatorio(itens))
+    os.replace(tmp, os.path.join(AQUI, "report.html"))
+    livres = sum(i["conhecido"].startswith("NÃO") for i in itens)
+    registrar(f"{len(objs)} candidatos ({args.dias} dias), {len(itens)} avaliados, {livres} fora do TNS, "
+              f"melhor nota {max((i['nota'] for i in itens), default=0):.1f}")
     if args.avisar:
         avisar_novos(itens)
     print(os.path.join(AQUI, "report.html"))
-
-
-# 60% do que os grupos profissionais reportaram passa de 18; nenhum candidato
-# falso da varredura de 23/10/2026 passou
-AVISO = 18.0
-
-
-def avisar_novos(itens):
-    import subprocess
-    caminho = os.path.join(AQUI, "avisados.json")
-    vistos = set(json.load(open(caminho))) if os.path.exists(caminho) else set()
-    novos = [i for i in itens if i["conhecido"].startswith("NÃO") and i["nota"] >= AVISO and i["oid"] not in vistos]
-    if not novos:
-        return
-    vistos.update(i["oid"] for i in novos)
-    json.dump(sorted(vistos), open(caminho, "w"))
-    melhor = max(novos, key=lambda i: i["nota"])
-    texto = f"{len(novos)} candidato(s) fora do TNS. Melhor: {melhor['oid']} nota {melhor['nota']}"
-    subprocess.run(["osascript", "-e", f'display notification {json.dumps(texto)} with title "CacaSN: reporte já!" sound name "Glass"'])
-    subprocess.run(["open", os.path.join(AQUI, "report.html")])
 
 
 if __name__ == "__main__":

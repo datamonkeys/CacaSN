@@ -4,3 +4,5 @@ resultados.json
 __pycache__/
 avisados.json
 cache/
+cacasn.log
+*.tmp

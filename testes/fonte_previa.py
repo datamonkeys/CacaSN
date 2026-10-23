@@ -1,10 +1,13 @@
-"""Mede se 'já havia fonte pontual na referência' separa os candidatos que
-estão no TNS (quase sempre eventos reais) dos que ninguém reportou."""
-import io, json, os, sys, urllib.request
+"""Experimento: mede se 'já havia fonte pontual na referência' separa os
+candidatos que estão no TNS (quase sempre eventos reais) dos que ninguém
+reportou. Resultado em 23/10/2026: não separa (AUC ~0.5). Precisa de um
+resultados.json gerado antes por `python3 cacasn.py` com tns.json."""
+import json, os, sys, urllib.request
 import numpy as np
-from PIL import Image
 from scipy import ndimage
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import cacasn
 
 AQUI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -36,8 +39,12 @@ def img(url):
     url = url.replace("format=png", "format=fits")
     p = os.path.join(AQUI, "cache", hashlib.md5(url.encode()).hexdigest() + ".fits")
     if not os.path.exists(p):
-        open(p, "wb").write(urllib.request.urlopen(url, timeout=60).read())
-    return ler_fits(open(p, "rb").read())
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        req = urllib.request.Request(url, headers=cacasn.HDR)
+        with urllib.request.urlopen(req, timeout=60) as r, open(p, "wb") as out:
+            out.write(r.read())
+    with open(p, "rb") as fh:
+        return ler_fits(fh.read())
 
 def medidas(it):
     t, d = img(it["stamps"]["template"]), img(it["stamps"]["difference"])
@@ -50,7 +57,9 @@ def medidas(it):
     out["razao"] = out["dif"] / (out["ref"] + 1)  # quanto do brilho é novo
     return out
 
-d = [x for x in json.load(open(os.path.join(AQUI, "resultados.json"))) if x.get("stamps")]
+d = [x for x in cacasn.ler_json(os.path.join(AQUI, "resultados.json"), []) if x.get("stamps")]
+if not d:
+    sys.exit("rode antes: python3 cacasn.py --dias 10 (com tns.json)")
 y = np.array([x["conhecido"].startswith("TNS:") for x in d])
 M = [medidas(x) for x in d]
 def auc(v):
@@ -58,4 +67,5 @@ def auc(v):
 for k in M[0]:
     v = np.array([m[k] for m in M]); a = auc(v)
     print(f"{k:6s} AUC {a:.2f}  (TNS mediana {np.median(v[y]):.1f} | não-TNS {np.median(v[~y]):.1f})")
-json.dump([{**m, "oid": x["oid"], "tns": bool(t)} for m, x, t in zip(M, d, y)], open(os.path.join(AQUI, "cache", "medidas.json"), "w"))
+cacasn.gravar_json(os.path.join(AQUI, "cache", "medidas.json"),
+                   [{**m, "oid": x["oid"], "tns": bool(t)} for m, x, t in zip(M, d, y)])
