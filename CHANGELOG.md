@@ -2,6 +2,18 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] - 2026-10-23
+
+### Adicionado
+- Fonte Rubin (LSST) via o broker Fink (`--fonte ztf|rubin|ambas`), com nota própria medida contra o TNS
+  (AUC 0.895 numa metade de teste), recortes, curva de luz e links para o portal do Fink.
+- Fração do brilho que é nova (diferença contra referência) na nota do Rubin.
+- Checagem no VSX (variáveis conhecidas) e, para o Rubin, no histórico do ZTF, para os candidatos do topo.
+- Vigilância do fluxo do Rubin: avisa uma vez quando os alertas voltam (parados desde 14/07/2026).
+
+### Corrigido
+- O Fink responde 500 a datas em MJD: a busca usa ISO.
+
 ## [0.3.0] - 2026-10-23
 
 ### Adicionado

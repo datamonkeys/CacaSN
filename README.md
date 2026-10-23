@@ -30,6 +30,27 @@ The desktop alert uses macOS `osascript`; elsewhere it goes to the log. Set `SEN
 For each candidate the report shows the science · reference · difference stamps, the light curve,
 a score, the reasons behind it, and whether the position is already on TNS.
 
+## Rubin (LSST)
+
+`--fonte rubin` (or the default `ambas`) also scans Rubin alerts through the [Fink](https://fink-broker.org)
+broker: categories `most_likely_sn`, `sn_near_galaxy_candidate`, `extragalactic_new_candidate`,
+`extragalactic_lt20mag_candidate` and `hostless_candidate`. Each object gets a score from Rubin's own
+fields — brightness, S/N, `reliability`, point-likeness (`extendedness`), host with photometric
+redshift, SuperNNova, positive flux, number of alerts, dipoles, and the **fraction of the flux that
+is new** (difference vs. reference). Measured on 5,289 Rubin objects from 2026-06-25 to 07-20 against
+what teams reported to TNS (93): **AUC 0.895** on a half not used to pick the weights (brightness
+alone: 0.807). Professional teams report new sources; what is left over is mostly variability on an
+existing source.
+
+The top 30 are also checked against TNS, the VSX variable-star index and the ZTF history at that
+position (many earlier ZTF detections = an old source). In the July data this caught ASASSN-26de, a
+dwarf nova that scored high and was not on TNS (dwarf novae go to VSX, not TNS).
+
+**Stream status:** Fink, ALeRCE and ANTARES all show no Rubin alerts after mid-July 2026 (last night
+2026-07-14 in Fink). CacaSN records this in `rubin_estado.json` and, when the stream comes back,
+sends one "o Rubin voltou!" notification. Rubin's alarm threshold is 13.7 (top 1% of unreported
+objects in July, ~2–3 per active night).
+
 ## Score
 
 Up: SN probability from ALeRCE's stamp classifier and from its 2025 (beta) classifier, `drb`

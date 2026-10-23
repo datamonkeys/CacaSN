@@ -11,3 +11,4 @@ cacasn.log
 *.egg-info/
 build/
 .env
+rubin_estado.json
