@@ -1,3 +1,0 @@
-numpy>=1.20
-scipy>=1.7
-# cacasn.py só usa a biblioteca padrão; numpy/scipy são para testes/fonte_previa.py
