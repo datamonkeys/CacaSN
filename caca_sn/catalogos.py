@@ -48,6 +48,18 @@ def estrela_gaia(ra: float, dec: float) -> Any:
     return None
 
 
+def variavel_conhecida(ra: float, dec: float) -> Any:
+    """Estrela variável já catalogada no VSX (AAVSO) a até 5": anãs novas, novas,
+    variáveis da nossa galáxia que não vão para o TNS. Devolve "NOME (TIPO)",
+    None, ou SEM_RESPOSTA se o catálogo falhou."""
+    linhas = vizier("B/vsx/vsx", ra, dec, 5, "Name,Type")
+    if linhas is None:
+        return SEM_RESPOSTA
+    for nome, tipo in linhas:
+        return f"{nome.strip()} ({tipo.strip()})"
+    return None
+
+
 def tns_carregar(pasta: str) -> dict[str, Any] | None:
     """Credenciais do bot do TNS: variáveis TNS_BOT_ID/TNS_BOT_NAME/TNS_API_KEY
     (Docker, CI) ou o arquivo tns.json ao lado do programa (fora do git)."""

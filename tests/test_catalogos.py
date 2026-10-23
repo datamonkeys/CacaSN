@@ -23,6 +23,18 @@ class TesteGaia(unittest.TestCase):
             self.assertIs(catalogos.estrela_gaia(1, 2), catalogos.SEM_RESPOSTA)
 
 
+class TesteVSX(unittest.TestCase):
+    def test_variavel_conhecida(self):
+        with mock.patch.object(catalogos, "vizier", return_value=[["ASASSN-26de   ", "UG  "]]):
+            self.assertEqual(catalogos.variavel_conhecida(1, 2), "ASASSN-26de (UG)")
+
+    def test_nada_ou_fora_do_ar(self):
+        with mock.patch.object(catalogos, "vizier", return_value=[]):
+            self.assertIsNone(catalogos.variavel_conhecida(1, 2))
+        with mock.patch.object(catalogos, "vizier", return_value=None):
+            self.assertIs(catalogos.variavel_conhecida(1, 2), catalogos.SEM_RESPOSTA)
+
+
 class TesteCredenciais(unittest.TestCase):
     def test_variaveis_de_ambiente(self):
         env = {"TNS_BOT_ID": "7", "TNS_BOT_NAME": "b", "TNS_API_KEY": "k"}

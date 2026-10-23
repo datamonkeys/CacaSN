@@ -96,6 +96,32 @@ def pontuar(obj: dict[str, Any], dets: list[dict[str, Any]], novo: dict[str, flo
     return nota, motivos
 
 
+def historico_ztf(ra: float, dec: float, antes_de: float) -> int:
+    """Detecções do ZTF a até 2" antes de uma data (MJD): muitas = fonte antiga que varia.
+    Serve para os candidatos do Rubin; -1 se a ALeRCE não respondeu."""
+    q = urllib.parse.urlencode({"ra": ra, "dec": dec, "radius": 2, "page_size": 5})
+    try:
+        objs = get_json(f"{API}/objects/?{q}").get("items", [])
+    except Exception:
+        return -1
+    return sum(int(o.get("ndethist") or o.get("ndet") or 0) for o in objs if (o.get("firstmjd") or 1e9) < antes_de - 1)
+
+
+def conferir_conhecidos(it: dict[str, Any]) -> None:
+    """Checagens externas caras, só para os candidatos do topo: VSX e, no Rubin, o histórico do ZTF."""
+    vsx = catalogos.variavel_conhecida(it["ra"], it["dec"])
+    if vsx is catalogos.SEM_RESPOSTA:
+        it["motivos"].append("VSX não respondeu")
+    elif vsx:
+        it["nota"] = round(it["nota"] - 10, 2)
+        it["motivos"].append(f"variável conhecida no VSX: {vsx}")
+    if it.get("fonte") == "rubin":
+        antes = historico_ztf(it["ra"], it["dec"], mjd_agora() - it["idade"])
+        if antes > 5:
+            it["nota"] = round(it["nota"] - 5, 2)
+            it["motivos"].append(f"{antes} detecções do ZTF antes (fonte antiga)")
+
+
 def situacao_tns(tns: dict[str, Any] | None, ra: float, dec: float) -> str:
     if not tns:
         return "TNS não consultado (falta tns.json)"
