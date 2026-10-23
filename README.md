@@ -1,16 +1,31 @@
 # CacaSN
 
+[![ci](https://github.com/louisperner/CacaSN/actions/workflows/ci.yml/badge.svg)](https://github.com/louisperner/CacaSN/actions/workflows/ci.yml)
+
 Supernova hunter for the public ZTF alert stream (via the [ALeRCE](https://alerce.science) broker),
 with a check against the [Transient Name Server](https://www.wis-tns.org) so you only look at what
 nobody has reported yet. *Português abaixo.*
 
-    python3 cacasn.py              # candidates first detected in the last 3 days
-    python3 cacasn.py --dias 1     # only the freshest
-    python3 cacasn.py --avisar     # desktop alert for an unreported candidate with score >= 18
+## Install and run
+
+    uv sync                         # or: pip install .
+    uv run cacasn                   # candidates first detected in the last 3 days
+    uv run cacasn --dias 1          # only the freshest
+    uv run cacasn --avisar          # alert for an unreported candidate with score >= 18
     open report.html
 
-`cacasn.py` uses only the Python standard library (3.9+). The macOS notification uses `osascript`;
-on other systems the alert is printed instead.
+`python -m caca_sn` and `python3 cacasn.py` do the same. Python 3.9+; the only runtime dependency is
+`structlog` (without it the program still runs, logging through the standard library).
+
+With Docker:
+
+    docker build -t cacasn .
+    docker run --rm --env-file .env -v "$PWD/saida:/saida" cacasn --dias 2   # results land in ./saida
+
+Each run writes `resultados.json`, `report.html` and one JSON line per event to `cacasn.log`, next to
+the program or in `$CACASN_SAIDA` if set.
+The desktop alert uses macOS `osascript`; elsewhere it goes to the log. Set `SENTRY_DSN`
+(and `pip install ".[sentry]"`) to get scheduled-run failures in Sentry.
 
 For each candidate the report shows the science · reference · difference stamps, the light curve,
 a score, the reasons behind it, and whether the position is already on TNS.
@@ -39,7 +54,8 @@ pre-existing source.
 
 1. Create an account at https://www.wis-tns.org (free; requests are reviewed by hand).
 2. Create a bot at https://www.wis-tns.org/bots/edit and tick *Create new API key*.
-3. Save it as `tns.json` next to `cacasn.py` (gitignored):
+3. Either set `TNS_BOT_ID`, `TNS_BOT_NAME`, `TNS_API_KEY` (see `.env.example`), or save `tns.json`
+   next to `cacasn.py` (gitignored):
 
         {"bot_id": 12345, "bot_name": "your_bot_name", "api_key": "..."}
 
@@ -51,15 +67,18 @@ To report: TNS → *Submit → AT report*, with RA/Dec, date and magnitude of th
 (all in the report) and ZTF as the source of the data. Professional bots report clear ZTF supernovae
 within hours, so speed matters: schedule `--avisar` every few hours.
 
-## Tests
+## Development
 
-    python3 -m unittest discover -s testes -p "test_*.py"   # offline, APIs mocked
+    uv sync --all-extras
+    uv run python -m unittest discover -s tests -t .   # offline, every API mocked
+    uv run ruff check . && uv run mypy
 
-`testes/fonte_previa.py` is an experiment (does a pre-existing source in the reference separate
-reported from unreported? It didn't, AUC ~0.5). It needs `numpy`/`scipy` (`requirements.txt`) and a
-`resultados.json` from a previous run.
+Code layout: `caca_sn/avaliacao.py` (candidates and score), `catalogos.py` (Gaia, TNS),
+`relatorio.py`, `alertas.py`, `rede.py` (HTTP with retries, atomic writes), `registro.py` (logging),
+`cli.py`. See `CONTRIBUTING.md` and `CHANGELOG.md`.
 
-Each run appends one line to `cacasn.log`.
+`experimentos/fonte_previa.py` is an experiment (does a pre-existing source in the reference separate
+reported from unreported? It didn't, AUC ~0.5); it needs `pip install ".[experimentos]"`.
 
 ---
 
@@ -68,8 +87,8 @@ Each run appends one line to `cacasn.log`.
 Caçador de supernovas nos alertas públicos do ZTF via ALeRCE, conferindo no TNS o que já foi
 reportado. Só biblioteca padrão do Python; o aviso usa notificação do macOS (em outros sistemas, imprime).
 
-- `python3 cacasn.py [--dias 3] [--prob 0.5] [--avisar]` gera `report.html`.
-- Para consultar e reportar no TNS: crie conta e um bot, salve `tns.json` (formato acima).
+- `uv run cacasn [--dias 3] [--prob 0.5] [--avisar]` (ou `python3 cacasn.py`) gera `report.html`.
+- Para consultar e reportar no TNS: crie conta e um bot; use as variáveis do `.env.example` ou `tns.json`.
 - Quem reporta primeiro ao TNS fica como descobridor. Os robôs profissionais reportam as supernovas
   claras do ZTF em horas — a chance está em rodar com frequência e julgar os recortes.
 
