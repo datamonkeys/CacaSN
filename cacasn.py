@@ -164,7 +164,8 @@ def avaliar(obj, tns):
     noites = len({int(d["mjd"]) for d in dets})
     filtros = len({d["fid"] for d in dets})
     mags = sorted(dets, key=lambda d: d["mjd"])
-    distnr = min(d.get("distnr") or 99 for d in dets)
+    # distnr = -999 no ZTF quando não há fonte por perto
+    distnr = min((d["distnr"] for d in dets if (d.get("distnr") is not None and d["distnr"] >= 0)), default=99)
 
     motivos, nota = [], obj["probability"] * 10
     # classificador novo da ALeRCE: separa melhor SN de núcleo ativo (AUC 0.79

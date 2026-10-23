@@ -44,6 +44,8 @@ pre-existing source.
         {"bot_id": 12345, "bot_name": "your_bot_name", "api_key": "..."}
 
 TNS allows 10 cone searches per minute; CacaSN does one every 6.5 s and honours the `429` reset header.
+So the TNS check sets the pace: ~100 candidates take ~11 minutes, 500 take ~55. Without `tns.json`
+the run takes seconds (and every candidate shows "TNS não consultado").
 
 To report: TNS → *Submit → AT report*, with RA/Dec, date and magnitude of the first detection
 (all in the report) and ZTF as the source of the data. Professional bots report clear ZTF supernovae

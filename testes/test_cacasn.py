@@ -81,6 +81,28 @@ class TesteAvaliar(unittest.TestCase):
         self.assertIn("&amp;", h)  # links com & escapado
 
 
+    def test_distnr_sem_fonte_nao_vira_nucleo(self):
+        dets = [dict(det(1, 1, 20.0), distnr=-999), dict(det(2, 1, 19.5), distnr=-999)]
+        with mock.patch.object(cacasn, "get_json", falso_get_json(dets)), \
+             mock.patch.object(cacasn, "vizier", return_value=[]):
+            r = cacasn.avaliar(OBJ, None)
+        self.assertNotIn("no centro", " ".join(r["motivos"]))
+
+    def test_resultado_do_tns(self):
+        dets = [det(1, 1, 20.0), det(2, 1, 19.5)]
+        cfg = {"bot_id": 1, "bot_name": "b", "api_key": "k"}
+        casos = [(["AT 2026abc"], "TNS: AT 2026abc"), ([], "NÃO está no TNS — dá para reportar")]
+        for volta, esperado in casos:
+            with mock.patch.object(cacasn, "get_json", falso_get_json(dets)), \
+                 mock.patch.object(cacasn, "vizier", return_value=[]), \
+                 mock.patch.object(cacasn, "tns_busca", return_value=volta):
+                self.assertEqual(cacasn.avaliar(OBJ, cfg)["conhecido"], esperado)
+        with mock.patch.object(cacasn, "get_json", falso_get_json(dets)), \
+             mock.patch.object(cacasn, "vizier", return_value=[]), \
+             mock.patch.object(cacasn, "tns_busca", side_effect=TimeoutError()):
+            self.assertEqual(cacasn.avaliar(OBJ, cfg)["conhecido"], "TNS não respondeu (TimeoutError)")
+
+
 class TesteArquivos(unittest.TestCase):
     def test_gravar_json_atomico(self):
         with tempfile.TemporaryDirectory() as d:
