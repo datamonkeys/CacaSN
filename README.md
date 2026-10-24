@@ -84,7 +84,10 @@ pre-existing source.
 
         {"bot_id": 12345, "bot_name": "your_bot_name", "api_key": "..."}
 
-TNS allows 10 cone searches per minute; CacaSN does one every 6.5 s and honours the `429` reset header.
+CacaSN first matches candidates locally against TNS's full public object list (~211k objects,
+downloaded at most once a day into `cache/`, indexed by declination: 2,777 candidates in 0.8 s). The
+API is used only to confirm "not on TNS" for candidates at the alarm score, because that file is
+generated at 00:00 UTC. TNS allows 10 cone searches per minute; CacaSN does one every 6.5 s and honours the `429` reset header.
 So the TNS check sets the pace: ~100 candidates take ~11 minutes, 500 take ~55. Without `tns.json`
 the run takes seconds (and every candidate shows "TNS não consultado").
 

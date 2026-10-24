@@ -2,6 +2,14 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.0] - 2026-10-24
+
+### Adicionado
+- Busca local no TNS: o arquivo completo de objetos públicos (~211 mil, baixado no máximo uma vez por dia)
+  é indexado por declinação e consultado em milissegundos (2.777 candidatos em 0,8 s, contra ~1,5 h pela
+  API a uma busca a cada 6,5 s). A API só confirma o "não está" de quem tem nota de alarme, porque o
+  arquivo é da meia-noite UTC.
+
 ## [0.8.0] - 2026-10-24
 
 ### Adicionado

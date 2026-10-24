@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from . import acompanhamento, alertas, avaliacao, catalogos, curva, novidades, registro, rubin
+from . import acompanhamento, alertas, avaliacao, catalogos, curva, novidades, registro, rubin, tns_local
 from .rascunho import rascunho
 from .rede import gravar_json, gravar_texto, ler_json
 from .relatorio import relatorio
@@ -33,21 +33,33 @@ def _seguro(obj: dict[str, Any], tns: dict[str, Any] | None) -> dict[str, Any] |
         return None
 
 
-def tns_com_cache(itens: list[dict[str, Any]], tns: dict[str, Any] | None, pasta: str, corte: float) -> None:
-    """Situação no TNS só para quem pode disparar o alarme (nota >= corte). Quem já tem
-    nome no TNS fica no cache (tns_cache.json) e não é perguntado de novo; os não
-    reportados são conferidos a cada rodada, porque alguém pode reportar no meio-tempo."""
+def tns_com_cache(itens: list[dict[str, Any]], tns: dict[str, Any] | None, pasta: str, corte: float, indice: Any = None) -> None:
+    """Situação no TNS só para quem pode disparar o alarme (nota >= corte).
+
+    Ordem: cache dos já reportados (tns_cache.json) -> arquivo completo do TNS em cache
+    local (tns_local) -> API. A API só é usada para confirmar o "não está" de quem
+    chega no corte do alarme, porque o arquivo local é da meia-noite UTC."""
     caminho = os.path.join(pasta, "tns_cache.json")
     cache: dict[str, str] = ler_json(caminho, {})
     for it in sorted(itens, key=lambda x: -x["nota"]):
         if it["oid"] in cache:
             it["conhecido"] = cache[it["oid"]]
-        elif it["nota"] < corte:
+            continue
+        if it["nota"] < corte:
             it["conhecido"] = "TNS não consultado (nota baixa)"
+            continue
+        if indice is not None:
+            nomes = indice.buscar(it["ra"], it["dec"])
+            if nomes:
+                it["conhecido"] = "TNS: " + ", ".join(nomes)
+            elif it["nota"] < alertas.AVISO:
+                it["conhecido"] = "NÃO está no TNS — dá para reportar (arquivo do TNS de hoje 00h UTC)"
+            else:
+                it["conhecido"] = avaliacao.situacao_tns(tns, it["ra"], it["dec"])
         else:
             it["conhecido"] = avaliacao.situacao_tns(tns, it["ra"], it["dec"])
-            if it["conhecido"].startswith("TNS:"):
-                cache[it["oid"]] = it["conhecido"]
+        if it["conhecido"].startswith("TNS:"):
+            cache[it["oid"]] = it["conhecido"]
     gravar_json(caminho, cache)
 
 
@@ -61,7 +73,7 @@ def rodar_ztf(
         i.setdefault("fonte", "ztf")
     for it in sorted(itens, key=lambda x: -x["nota"])[:TOP_CONFERIR]:
         avaliacao.conferir_conhecidos(it)
-    tns_com_cache(itens, tns, pasta, CORTE_TNS)
+    tns_com_cache(itens, tns, pasta, CORTE_TNS, tns_local.carregar(tns, pasta))
     return itens
 
 

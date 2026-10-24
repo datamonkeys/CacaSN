@@ -141,6 +141,25 @@ class TesteTnsComCache(unittest.TestCase):
             self.assertEqual(itens[1]["conhecido"], "TNS: AT 2026y")
 
 
+class TesteTnsLocalNaOrdem(unittest.TestCase):
+    def test_local_antes_da_api_e_api_so_no_alarme(self):
+        indice = mock.Mock()
+        indice.buscar.side_effect = lambda ra, dec: ["AT 2026x"] if ra == 1 else []
+        itens = [
+            {"oid": "rep", "nota": 20.0, "ra": 1, "dec": 0, "conhecido": ""},
+            {"oid": "alarme", "nota": 19.0, "ra": 2, "dec": 0, "conhecido": ""},
+            {"oid": "medio", "nota": 16.0, "ra": 3, "dec": 0, "conhecido": ""},
+        ]
+        with (
+            tempfile.TemporaryDirectory() as d,
+            mock.patch.object(cli.avaliacao, "situacao_tns", return_value="NÃO está no TNS — dá para reportar") as api,
+        ):
+            cli.tns_com_cache(itens, {"x": 1}, d, 15, indice)
+        self.assertEqual(itens[0]["conhecido"], "TNS: AT 2026x")
+        self.assertEqual(api.call_count, 1)  # só o de nota de alarme é confirmado na API
+        self.assertIn("arquivo do TNS", itens[2]["conhecido"])
+
+
 class TesteRascunho(unittest.TestCase):
     IT = {
         "oid": "ZTF26x",
