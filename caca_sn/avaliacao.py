@@ -12,19 +12,27 @@ API = "https://api.alerce.online/ztf/v1"
 STAMP = "https://avro.alerce.online/get_stamp"
 
 
-def candidatos(dias: float, prob: float) -> list[dict[str, Any]]:
-    q = urllib.parse.urlencode(
-        dict(
-            classifier="stamp_classifier",
-            **{"class": "SN"},
-            probability=prob,
-            firstmjd=f"{mjd_agora() - dias:.3f}",
-            page_size=500,
-            order_by="probability",
-            order_mode="DESC",
-        )
-    )
-    return get_json(f"{API}/objects/?{q}").get("items", [])
+def candidatos(dias: float, prob: float, a_partir: float = 0, max_paginas: int = 20) -> list[dict[str, Any]]:
+    """Candidatos com primeira detecção entre `dias` e `a_partir` dias atrás. A ALeRCE
+    devolve até 500 por página: percorre as páginas até acabar (ou `max_paginas`)."""
+    filtros = [
+        ("classifier", "stamp_classifier"),
+        ("class", "SN"),
+        ("probability", prob),
+        ("firstmjd", f"{mjd_agora() - dias:.3f}"),
+        ("page_size", 500),
+        ("order_by", "probability"),
+        ("order_mode", "DESC"),
+    ]
+    if a_partir > 0:
+        filtros.append(("firstmjd", f"{mjd_agora() - a_partir:.3f}"))  # dois firstmjd = intervalo
+    itens: list[dict[str, Any]] = []
+    for pagina in range(1, max_paginas + 1):
+        lote = get_json(f"{API}/objects/?{urllib.parse.urlencode(filtros + [('page', pagina)])}").get("items", [])
+        itens += lote
+        if len(lote) < 500:
+            break
+    return itens
 
 
 def subindo_de_brilho(dets: list[dict[str, Any]]) -> bool:

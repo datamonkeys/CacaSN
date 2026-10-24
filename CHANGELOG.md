@@ -2,6 +2,13 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.8.0] - 2026-10-24
+
+### Adicionado
+- `--a-partir N`: pula os N dias mais recentes, para procurar no passado (ex.: `--dias 120 --a-partir 30`).
+  Objeto antigo nunca reportado ainda pode ser reportado; o TNS registra a data da primeira detecção.
+- Paginação da ALeRCE (antes vinham só os 500 primeiros).
+
 ## [0.7.1] - 2026-10-24
 
 ### Adicionado

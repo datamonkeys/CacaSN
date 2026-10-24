@@ -11,6 +11,7 @@ nobody has reported yet. *Português abaixo.*
     uv sync                         # or: pip install .
     uv run cacasn                   # candidates first detected in the last 21 days
     uv run cacasn --dias 3          # only the freshest
+    uv run cacasn --fonte ztf --dias 120 --a-partir 30   # look back: first seen 30-120 days ago
     uv run cacasn --avisar          # alert for an unreported candidate with score >= 18
     open report.html
 

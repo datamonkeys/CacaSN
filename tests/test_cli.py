@@ -30,7 +30,7 @@ class TesteRodada(unittest.TestCase):
     def test_argumentos(self):
         with mock.patch.object(cli, "rodar") as r, mock.patch.object(cli.registro, "configurar"), mock.patch("builtins.print"):
             self.assertEqual(cli.main(["--dias", "1", "--prob", "0.7", "--avisar"]), 0)
-        r.assert_called_once_with(1.0, 0.7, True, fontes=("ztf", "rubin"))
+        r.assert_called_once_with(1.0, 0.7, True, fontes=("ztf", "rubin"), a_partir=0.0)
 
 
 class TesteRubinNaRodada(unittest.TestCase):

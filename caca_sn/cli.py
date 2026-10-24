@@ -51,8 +51,10 @@ def tns_com_cache(itens: list[dict[str, Any]], tns: dict[str, Any] | None, pasta
     gravar_json(caminho, cache)
 
 
-def rodar_ztf(dias: float, prob: float, tns: dict[str, Any] | None, pasta: str = PASTA) -> list[dict[str, Any]]:
-    objs = avaliacao.candidatos(dias, prob)
+def rodar_ztf(
+    dias: float, prob: float, tns: dict[str, Any] | None, pasta: str = PASTA, a_partir: float = 0
+) -> list[dict[str, Any]]:
+    objs = avaliacao.candidatos(dias, prob, a_partir)
     with ThreadPoolExecutor(6) as ex:
         itens = [r for r in ex.map(lambda o: _seguro(o, None), objs) if r]
     for i in itens:
@@ -109,12 +111,19 @@ def rodar_rubin(dias: float, tns: dict[str, Any] | None) -> list[dict[str, Any]]
     return itens
 
 
-def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tuple[str, ...] = FONTES) -> list[dict[str, Any]]:
+def rodar(
+    dias: float,
+    prob: float,
+    avisar: bool,
+    pasta: str = PASTA,
+    fontes: tuple[str, ...] = FONTES,
+    a_partir: float = 0,
+) -> list[dict[str, Any]]:
     log = registro.obter()
     tns = catalogos.tns_carregar(pasta)
     itens: list[dict[str, Any]] = []
     if "ztf" in fontes:
-        itens += rodar_ztf(dias, prob, tns, pasta)
+        itens += rodar_ztf(dias, prob, tns, pasta, a_partir)
     if "rubin" in fontes:
         vigiar_fluxo_rubin(pasta)
         itens += rodar_rubin(dias, tns)
@@ -172,6 +181,13 @@ def main(argv: list[str] | None = None) -> int:
         default=21,
         help="primeira detecção há no máximo N dias (a nota sobe com as noites: os 2 de out/2026 tinham 16-20 dias)",
     )
+    ap.add_argument(
+        "--a-partir",
+        type=float,
+        default=0,
+        metavar="N",
+        help="ZTF: pula os N dias mais recentes (ex.: --dias 120 --a-partir 30 procura no passado)",
+    )
     ap.add_argument("--prob", type=float, default=0.5, help="ZTF: probabilidade mínima de SN no stamp classifier")
     ap.add_argument("--fonte", choices=(*FONTES, "ambas"), default="ambas", help="de onde buscar os alertas")
     ap.add_argument(
@@ -194,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     registro.configurar(os.path.join(PASTA, "cacasn.log"))
     fontes = FONTES if args.fonte == "ambas" else (args.fonte,)
     try:
-        rodar(args.dias, args.prob, args.avisar, fontes=fontes)
+        rodar(args.dias, args.prob, args.avisar, fontes=fontes, a_partir=args.a_partir)
     except Exception as e:
         registro.obter().error("rodada_falhou", erro=repr(e))
         raise

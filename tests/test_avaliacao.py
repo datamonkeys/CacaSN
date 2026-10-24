@@ -76,6 +76,27 @@ class TesteAvaliar(unittest.TestCase):
         self.assertIn("candid=c2", r["stamps"]["difference"])
 
 
+class TesteCandidatos(unittest.TestCase):
+    def test_pagina_ate_acabar_e_intervalo(self):
+        urls = []
+
+        def falso(url, tentativas=4):
+            urls.append(url)
+            return {"items": [{}] * (500 if len(urls) < 3 else 7)}
+
+        with mock.patch.object(avaliacao, "get_json", falso):
+            itens = avaliacao.candidatos(120, 0.4, a_partir=30)
+        self.assertEqual(len(itens), 1007)
+        self.assertEqual(len(urls), 3)
+        self.assertEqual(urls[0].count("firstmjd="), 2)  # intervalo
+        self.assertIn("page=3", urls[2])
+
+    def test_sem_intervalo_um_firstmjd(self):
+        with mock.patch.object(avaliacao, "get_json", return_value={"items": []}) as g:
+            avaliacao.candidatos(3, 0.5)
+        self.assertEqual(g.call_args[0][0].count("firstmjd="), 1)
+
+
 class TesteConhecidos(unittest.TestCase):
     def item(self, fonte="ztf"):
         return {"ra": 1.0, "dec": 2.0, "nota": 20.0, "motivos": [], "fonte": fonte, "idade": 10.0}
