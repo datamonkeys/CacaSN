@@ -2,6 +2,15 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] - 2026-10-23
+
+### Adicionado
+- `--rascunho OID`: relatório de descoberta (AT report) no formato de envio em lote do TNS 2.0, com
+  fotometria e IDs de fonte/câmera/filtro do TNS. Só gera o arquivo; nunca envia.
+- Curva de luz completa do Fink para os 30 melhores do Rubin e velocidade de subida (mag/dia por filtro)
+  nos motivos.
+- Curva com mais de 60 dias perde 5 pontos (os reportados ao TNS em julho tinham até 18 dias).
+
 ## [0.4.0] - 2026-10-23
 
 ### Adicionado

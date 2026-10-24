@@ -43,7 +43,10 @@ alone: 0.807). Professional teams report new sources; what is left over is mostl
 existing source.
 
 The top 30 are also checked against TNS, the VSX variable-star index and the ZTF history at that
-position (many earlier ZTF detections = an old source). In the July data this caught ASASSN-26de, a
+position (many earlier ZTF detections = an old source), and get their full light curve from Fink.
+A light curve longer than 60 days costs 5 points: every Rubin object reported to TNS in July spanned
+≤ 18 days, while the unreported ones with 145–248 days (and up to 415 points, in the deep fields) were
+sources that have varied for months. The report shows the brightening rate in mag/day per filter. In the July data this caught ASASSN-26de, a
 dwarf nova that scored high and was not on TNS (dwarf novae go to VSX, not TNS).
 
 **Stream status:** Fink, ALeRCE and ANTARES all show no Rubin alerts after mid-July 2026 (last night
@@ -84,9 +87,13 @@ TNS allows 10 cone searches per minute; CacaSN does one every 6.5 s and honours 
 So the TNS check sets the pace: ~100 candidates take ~11 minutes, 500 take ~55. Without `tns.json`
 the run takes seconds (and every candidate shows "TNS não consultado").
 
-To report: TNS → *Submit → AT report*, with RA/Dec, date and magnitude of the first detection
-(all in the report) and ZTF as the source of the data. Professional bots report clear ZTF supernovae
-within hours, so speed matters: schedule `--avisar` every few hours.
+To report: `cacasn --rascunho <OID>` writes `rascunhos/<OID>.json`, an AT report in the TNS 2.0 bulk
+format (`api/set/bulk-report`) with position, discovery date, the light curve as photometry and the
+TNS IDs of the data source, camera and filters (read from objects already on TNS: ZTF = 48, ZTF-Cam =
+196, g/r/i = 110/111/112; Rubin = 165, LSSTCam = 287, g/i/z = 161/163/164 — u/r/y = 160/162/165 are
+inferred). It never sends anything: add `reporter` and `reporting_groupid` to `tns.json`, try it on
+https://sandbox.wis-tns.org, then submit on TNS. Professional bots report clear ZTF supernovae within
+hours, so speed matters: schedule `--avisar` every few hours.
 
 ## Development
 

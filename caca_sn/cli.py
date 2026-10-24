@@ -8,7 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from . import alertas, avaliacao, catalogos, registro, rubin
+from . import alertas, avaliacao, catalogos, curva, registro, rubin
+from .rascunho import rascunho
 from .rede import gravar_json, gravar_texto, ler_json
 from .relatorio import relatorio
 
@@ -67,6 +68,13 @@ def rodar_rubin(dias: float, tns: dict[str, Any] | None) -> list[dict[str, Any]]
     itens = [rubin.objeto(oid, als) for oid, als in rubin.por_objeto(rubin.alertas(dias)).items()]
     itens.sort(key=lambda x: -x["nota"])
     for it in itens[:TOP_RUBIN_TNS]:
+        completa = rubin.curva_completa(it["oid"].replace("LSST ", ""))
+        if completa:
+            it["mjd0"], it["curva"] = completa
+            dias = curva.duracao(it["curva"])
+            if dias > curva.DURACAO_VARIAVEL:
+                it["nota"] = round(it["nota"] - 5, 2)
+                it["motivos"].append(f"detectado há {dias:.0f} dias ({len(it['curva'])} pontos): varia há meses")
         avaliacao.conferir_conhecidos(it)
     itens.sort(key=lambda x: -x["nota"])
     for i, it in enumerate(itens):
@@ -88,6 +96,9 @@ def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tu
     if "rubin" in fontes:
         vigiar_fluxo_rubin(pasta)
         itens += rodar_rubin(dias, tns)
+    for it in itens:
+        if (m := curva.motivo_subida(it.get("curva", []), it.get("idade", 99))) and m not in it["motivos"]:
+            it["motivos"].append(m)
     gravar_json(os.path.join(pasta, "resultados.json"), itens, indent=1)
     gravar_texto(os.path.join(pasta, "report.html"), relatorio(itens))
     for fonte in fontes:
@@ -106,6 +117,26 @@ def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tu
     return itens
 
 
+def gerar_rascunho(oid: str, pasta: str = PASTA) -> int:
+    """Escreve rascunhos/<oid>.json para revisar e enviar pelo site do TNS."""
+    itens = ler_json(os.path.join(pasta, "resultados.json"), [])
+    it = next((i for i in itens if i["oid"] == oid or i["oid"] == f"LSST {oid}"), None)
+    if it is None:
+        print(f"{oid} não está no último resultados.json")
+        return 1
+    if not it["conhecido"].startswith("NÃO"):
+        print(f"atenção: {it['conhecido']}")
+    relatorio, pendencias = rascunho(it, catalogos.tns_carregar(pasta))
+    os.makedirs(os.path.join(pasta, "rascunhos"), exist_ok=True)
+    destino = os.path.join(pasta, "rascunhos", f"{it['oid'].replace(' ', '_')}.json")
+    gravar_json(destino, relatorio, indent=2, ensure_ascii=False)
+    print(destino)
+    for p in pendencias:
+        print(f"  pendente: {p}")
+    print("  nada foi enviado. Revise e envie pelo site do TNS (teste antes em https://sandbox.wis-tns.org).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="cacasn", description="Caçador de supernovas nos alertas do ZTF (ALeRCE) e do Rubin (Fink)."
@@ -118,7 +149,10 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=f"avisa candidato fora do TNS (ZTF: nota >= {alertas.AVISO}; Rubin: >= {rubin.AVISO})",
     )
+    ap.add_argument("--rascunho", metavar="OID", help="gera o relatório para o TNS de um candidato da última rodada (não envia)")
     args = ap.parse_args(argv)
+    if args.rascunho:
+        return gerar_rascunho(args.rascunho)
     registro.configurar(os.path.join(PASTA, "cacasn.log"))
     fontes = FONTES if args.fonte == "ambas" else (args.fonte,)
     try:

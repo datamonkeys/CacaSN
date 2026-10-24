@@ -59,6 +59,7 @@ class TesteRubinNaRodada(unittest.TestCase):
             mock.patch.object(cli.avaliacao, "candidatos") as ztf,
             mock.patch.object(catalogos, "tns_carregar", return_value={"bot_id": 1, "bot_name": "b", "api_key": "k"}),
             mock.patch.object(cli.avaliacao, "conferir_conhecidos"),
+            mock.patch.object(cli.rubin, "curva_completa", return_value=(61000.0, [(0.0, 1, 20.0)])),
             mock.patch.object(cli.avaliacao, "situacao_tns", return_value="NÃO está no TNS — dá para reportar"),
         ):
             itens = cli.rodar(3, 0.5, avisar=False, pasta=d, fontes=("rubin",))
@@ -82,6 +83,67 @@ class TesteFluxoRubin(unittest.TestCase):
                 self.assertTrue(cli.vigiar_fluxo_rubin(d))
         self.assertEqual(n.call_count, 1)
         self.assertIn("Rubin voltou", n.call_args[0][0])
+
+
+class TesteDuracaoNaRodada(unittest.TestCase):
+    def test_curva_longa_perde_pontos(self):
+        it = {
+            "oid": "LSST 1",
+            "nota": 20.0,
+            "ra": 1.0,
+            "dec": 2.0,
+            "conhecido": "TNS: x",
+            "fonte": "rubin",
+            "mag": 20.0,
+            "idade": 1.0,
+            "prob": 0.9,
+            "drb": 0.99,
+            "motivos": [],
+            "stamps": {},
+            "curva": [],
+        }
+        longa = (61000.0, [(0.0, 1, 20.0), (200.0, 1, 20.1)])
+        with (
+            mock.patch.object(cli.rubin, "alertas", return_value=[]),
+            mock.patch.object(cli.rubin, "por_objeto", return_value={1: []}),
+            mock.patch.object(cli.rubin, "objeto", return_value=dict(it)),
+            mock.patch.object(cli.rubin, "curva_completa", return_value=longa),
+            mock.patch.object(cli.avaliacao, "conferir_conhecidos"),
+        ):
+            r = cli.rodar_rubin(3, None)[0]
+        self.assertEqual(r["nota"], 15.0)
+        self.assertTrue(any("varia há meses" in m for m in r["motivos"]))
+
+
+class TesteRascunho(unittest.TestCase):
+    IT = {
+        "oid": "ZTF26x",
+        "ra": 10.0,
+        "dec": -5.0,
+        "mjd0": 61330.25,
+        "fonte": "ztf",
+        "motivos": ["2 noites"],
+        "conhecido": "NÃO está no TNS — dá para reportar",
+        "curva": [(0.0, 1, 19.8), (1.0, 2, 19.5)],
+        "nota": 20,
+    }
+
+    def test_gera_arquivo_e_avisa_pendencias(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch("builtins.print") as p:
+            rede_json = os.path.join(d, "resultados.json")
+            with open(rede_json, "w") as f:
+                json.dump([self.IT], f)
+            with mock.patch.object(catalogos, "tns_carregar", return_value={}):
+                self.assertEqual(cli.gerar_rascunho("ZTF26x", pasta=d), 0)
+            with open(os.path.join(d, "rascunhos", "ZTF26x.json")) as f:
+                r = json.load(f)["at_report"]["0"]
+        self.assertEqual(r["internal_name"], "ZTF26x")
+        self.assertTrue(any("reporting_groupid" in str(c) for c in p.call_args_list))
+        self.assertTrue(any("nada foi enviado" in str(c) for c in p.call_args_list))
+
+    def test_oid_que_nao_existe(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch("builtins.print"):
+            self.assertEqual(cli.gerar_rascunho("nada", pasta=d), 1)
 
 
 if __name__ == "__main__":
