@@ -138,7 +138,7 @@ def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tu
         alertas.avisar_novos(itens, pasta)
     acompanhamento.verificar(tns, pasta)
     vistos = {str(i["oid"]).replace("LSST ", "") for i in itens} | set(ler_json(os.path.join(pasta, "tns_cache.json"), {}))
-    novidades.verificar(tns, pasta, vistos)
+    novidades.verificar(tns, pasta, vistos, buscar_hoje=novidades.buscar_modificados)
     return itens
 
 

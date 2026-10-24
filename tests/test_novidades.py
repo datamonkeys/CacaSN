@@ -36,8 +36,8 @@ class TesteLeitura(unittest.TestCase):
         r = novidades.resumir(novidades.ler_csv(zipado(LINHAS)), vistos={"ZTF26acbihrg"})
         self.assertEqual(r["novos"], 1)
         self.assertEqual(len(r["classificados"]), 2)
-        self.assertIn("SN 2026afou = SN Ia: o CacaSN tinha visto (ZTF26acbihrg)", r["destaques"])
-        self.assertTrue(any("2026aady = SLSN-I (raro" in x for x in r["destaques"]))
+        self.assertIn(("2026afou", "SN 2026afou = SN Ia: o CacaSN tinha visto (ZTF26acbihrg)"), r["destaques"])
+        self.assertTrue(any("2026aady = SLSN-I (raro" in x for _, x in r["destaques"]))
 
 
 class TesteVerificar(unittest.TestCase):
@@ -68,13 +68,38 @@ class TesteVerificar(unittest.TestCase):
             novidades.verificar(CFG, d, set(), hoje=date(2026, 10, 24), baixar=lambda c, dia: dias.append(dia) or [])
         self.assertEqual([x.day for x in dias], [21, 22, 23])
 
+    def test_dentro_do_dia_sem_aviso_repetido(self):
+        hoje = [{"name_prefix": "SN", "name": "2026iin", "type": "SN IIn", "redshift": "0.02", "internal_names": "X"}]
+        chamadas = []
+
+        def buscar(cfg, desde):
+            chamadas.append(desde)
+            return hoje
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(novidades.alertas, "notificar") as n:
+            a = novidades.verificar(CFG, d, set(), hoje=date(2026, 10, 24), baixar=lambda c, dia: [], buscar_hoje=buscar)
+            b = novidades.verificar(CFG, d, set(), hoje=date(2026, 10, 24), baixar=lambda c, dia: [], buscar_hoje=buscar)
+        self.assertEqual(len(a), 1)
+        self.assertIn("IIn", a[0])
+        self.assertEqual(b, [])  # o mesmo objeto não é avisado de novo
+        self.assertEqual(n.call_count, 1)
+        self.assertTrue(chamadas[0].endswith("00:00:00"))  # 1ª consulta: desde a meia-noite UTC
+
+    def test_diario_nao_repete_o_que_ja_foi_avisado_no_dia(self):
+        dia = [{"name_prefix": "SN", "name": "2026iin", "type": "SN IIn", "redshift": "", "internal_names": ""}]
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(novidades.alertas, "notificar") as n:
+            novidades.verificar(CFG, d, set(), hoje=date(2026, 10, 24), baixar=lambda c, x: [], buscar_hoje=lambda c, s: dia)
+            depois = novidades.verificar(CFG, d, set(), hoje=date(2026, 10, 25), baixar=lambda c, x: dia)
+        self.assertEqual(depois, [])
+        self.assertEqual(n.call_count, 1)
+
     def test_falha_para_e_tenta_depois(self):
         def falha(cfg, dia):
             raise OSError("fora")
 
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(novidades.verificar(CFG, d, set(), hoje=date(2026, 10, 24), baixar=falha), [])
-            self.assertEqual(novidades.ler_json(os.path.join(d, novidades.ESTADO), {}), {})
+            self.assertNotIn("ultimo_dia", novidades.ler_json(os.path.join(d, novidades.ESTADO), {}))  # tenta de novo depois
 
     def test_sem_credenciais(self):
         with tempfile.TemporaryDirectory() as d:

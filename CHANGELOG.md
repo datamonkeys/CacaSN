@@ -2,6 +2,13 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.1] - 2026-10-24
+
+### Adicionado
+- Novidades do dia em andamento: o arquivo diário do TNS só sai depois que o dia fecha, então cada rodada
+  também busca na API (`public_timestamp`) as classificações desde a rodada anterior.
+- Um objeto nunca é avisado duas vezes (nem pelo dia em andamento e depois pelo arquivo diário).
+
 ## [0.7.0] - 2026-10-24
 
 ### Adicionado
