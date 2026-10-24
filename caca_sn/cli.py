@@ -25,12 +25,19 @@ CORTE_TNS = 15.0
 TOP_CONFERIR = 20
 
 
-def _seguro(obj: dict[str, Any], tns: dict[str, Any] | None) -> dict[str, Any] | None:
+class Falhou:
+    """Marca o objeto que deu erro (diferente de None = não é candidato), para a 2ª passada."""
+
+
+FALHOU = Falhou()
+
+
+def _seguro(obj: dict[str, Any], tns: dict[str, Any] | None) -> dict[str, Any] | None | Falhou:
     try:
         return avaliacao.avaliar(obj, tns)
     except Exception as e:  # um objeto quebrado não derruba a rodada
         registro.obter().warning("erro_no_objeto", oid=obj.get("oid"), erro=repr(e))
-        return None
+        return FALHOU
 
 
 def tns_com_cache(itens: list[dict[str, Any]], tns: dict[str, Any] | None, pasta: str, corte: float, indice: Any = None) -> None:
@@ -67,8 +74,15 @@ def rodar_ztf(
     dias: float, prob: float, tns: dict[str, Any] | None, pasta: str = PASTA, a_partir: float = 0
 ) -> list[dict[str, Any]]:
     objs = avaliacao.candidatos(dias, prob, a_partir)
-    with ThreadPoolExecutor(6) as ex:
-        itens = [r for r in ex.map(lambda o: _seguro(o, None), objs) if r]
+    with ThreadPoolExecutor(4) as ex:
+        resultados = list(ex.map(lambda o: _seguro(o, None), objs))
+    # 2ª passada, um por vez, para quem falhou (em geral limite da ALeRCE em rodadas grandes)
+    falhos = [o for o, r in zip(objs, resultados) if r is FALHOU]
+    resultados = [r for r in resultados if r is not FALHOU] + [_seguro(o, None) for o in falhos]
+    itens = [r for r in resultados if isinstance(r, dict)]
+    perdidos = sum(r is FALHOU for r in resultados)
+    if falhos:
+        registro.obter().info("segunda_passada", tentados=len(falhos), perdidos=perdidos)
     for i in itens:
         i.setdefault("fonte", "ztf")
     for it in sorted(itens, key=lambda x: -x["nota"])[:TOP_CONFERIR]:

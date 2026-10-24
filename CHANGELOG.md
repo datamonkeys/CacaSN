@@ -2,6 +2,13 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.1] - 2026-10-24
+
+### Corrigido
+- Limite da ALeRCE (HTTP 429) em rodadas grandes descartava candidatos (452 de 2.777 numa busca de 30-120
+  dias): agora respeita o `Retry-After` (ou espera 15/30/60 s), faz uma 2ª passada para quem falhou e usa
+  4 consultas em paralelo em vez de 6.
+
 ## [0.9.0] - 2026-10-24
 
 ### Adicionado

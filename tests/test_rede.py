@@ -38,6 +38,25 @@ class TesteHttp(unittest.TestCase):
             with self.assertRaises(OSError):
                 rede.get_json("https://x", tentativas=2)
 
+    def test_429_espera_o_retry_after_e_tenta_mais(self):
+        import urllib.error
+
+        e429 = urllib.error.HTTPError("u", 429, "x", {"Retry-After": "7"}, None)
+        ok = mock.MagicMock()
+        ok.__enter__.return_value.read.return_value = b"{}"
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=[e429, e429, e429, e429, ok]),
+            mock.patch.object(rede.time, "sleep") as dorme,
+        ):
+            self.assertEqual(rede.get_json("https://x", tentativas=2), {})  # 429 não gasta as tentativas comuns
+        self.assertEqual([c.args[0] for c in dorme.call_args_list], [7.0] * 4)
+
+    def test_429_sem_retry_after_espera_crescente(self):
+        import urllib.error
+
+        e = urllib.error.HTTPError("u", 429, "x", {}, None)
+        self.assertEqual([rede.espera_429(e, i) for i in range(3)], [15.0, 30.0, 60.0])
+
     def test_user_agent_identifica_o_projeto(self):
         self.assertIn("github.com/louisperner/CacaSN", rede.HDR["User-Agent"])
 

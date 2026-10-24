@@ -33,6 +33,30 @@ class TesteRodada(unittest.TestCase):
         r.assert_called_once_with(1.0, 0.7, True, fontes=("ztf", "rubin"), a_partir=0.0)
 
 
+class TesteSegundaPassada(unittest.TestCase):
+    def test_quem_falhou_e_tentado_de_novo(self):
+        tentativas = {}
+
+        def avaliar(obj, tns):
+            tentativas[obj["oid"]] = tentativas.get(obj["oid"], 0) + 1
+            if obj["oid"] == "instavel" and tentativas["instavel"] == 1:
+                raise OSError("429")
+            if obj["oid"] == "quebrado":
+                raise ValueError("sempre")
+            return {"oid": obj["oid"], "nota": 1.0, "ra": 1, "dec": 2, "motivos": [], "conhecido": ""}
+
+        objs = [{"oid": "bom"}, {"oid": "instavel"}, {"oid": "quebrado"}]
+        with (
+            tempfile.TemporaryDirectory() as d,
+            mock.patch.object(cli.avaliacao, "candidatos", return_value=objs),
+            mock.patch.object(cli.avaliacao, "avaliar", side_effect=avaliar),
+            mock.patch.object(cli.avaliacao, "conferir_conhecidos"),
+        ):
+            itens = cli.rodar_ztf(3, 0.5, None, pasta=d)
+        self.assertEqual(sorted(i["oid"] for i in itens), ["bom", "instavel"])
+        self.assertEqual(tentativas, {"bom": 1, "instavel": 2, "quebrado": 2})
+
+
 class TesteRubinNaRodada(unittest.TestCase):
     def test_so_rubin_e_escolha_da_fonte(self):
         it = {
