@@ -115,6 +115,32 @@ class TesteDuracaoNaRodada(unittest.TestCase):
         self.assertTrue(any("varia há meses" in m for m in r["motivos"]))
 
 
+class TesteTnsComCache(unittest.TestCase):
+    def itens(self):
+        return [
+            {"oid": "a", "nota": 20.0, "ra": 1, "dec": 2, "conhecido": ""},
+            {"oid": "b", "nota": 19.0, "ra": 1, "dec": 2, "conhecido": ""},
+            {"oid": "c", "nota": 5.0, "ra": 1, "dec": 2, "conhecido": ""},
+        ]
+
+    def test_so_consulta_acima_do_corte_e_guarda_os_reportados(self):
+        respostas = {"a": "TNS: AT 2026x", "b": "NÃO está no TNS — dá para reportar"}
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch.object(cli.avaliacao, "situacao_tns", side_effect=lambda t, ra, dec: respostas[ordem.pop(0)]) as s:
+                ordem = ["a", "b"]
+                itens = self.itens()
+                cli.tns_com_cache(itens, {"x": 1}, d, 15)
+            self.assertEqual(s.call_count, 2)
+            self.assertEqual(itens[2]["conhecido"], "TNS não consultado (nota baixa)")
+            # segunda rodada: "a" vem do cache, "b" (não reportado) é conferido de novo
+            with mock.patch.object(cli.avaliacao, "situacao_tns", return_value="TNS: AT 2026y") as s2:
+                itens = self.itens()
+                cli.tns_com_cache(itens, {"x": 1}, d, 15)
+            self.assertEqual(s2.call_count, 1)
+            self.assertEqual(itens[0]["conhecido"], "TNS: AT 2026x")
+            self.assertEqual(itens[1]["conhecido"], "TNS: AT 2026y")
+
+
 class TesteRascunho(unittest.TestCase):
     IT = {
         "oid": "ZTF26x",

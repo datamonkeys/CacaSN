@@ -18,6 +18,9 @@ PASTA = os.environ.get("CACASN_SAIDA") or os.path.dirname(os.path.dirname(os.pat
 FONTES = ("ztf", "rubin")
 # consulta ao TNS (10/min) só para os melhores do Rubin que o Fink não marcou
 TOP_RUBIN_TNS = 30
+# no ZTF o TNS só é consultado de 15 para cima: no teste de 30 dias (out/2026) todos os
+# 6 alarmes (>= 18, fora do TNS) estavam acima disso, e as consultas caem de 447 para 159
+CORTE_TNS = 15.0
 # VSX (variáveis conhecidas) só para os melhores do ZTF
 TOP_CONFERIR = 20
 
@@ -30,14 +33,33 @@ def _seguro(obj: dict[str, Any], tns: dict[str, Any] | None) -> dict[str, Any] |
         return None
 
 
-def rodar_ztf(dias: float, prob: float, tns: dict[str, Any] | None) -> list[dict[str, Any]]:
+def tns_com_cache(itens: list[dict[str, Any]], tns: dict[str, Any] | None, pasta: str, corte: float) -> None:
+    """Situação no TNS só para quem pode disparar o alarme (nota >= corte). Quem já tem
+    nome no TNS fica no cache (tns_cache.json) e não é perguntado de novo; os não
+    reportados são conferidos a cada rodada, porque alguém pode reportar no meio-tempo."""
+    caminho = os.path.join(pasta, "tns_cache.json")
+    cache: dict[str, str] = ler_json(caminho, {})
+    for it in sorted(itens, key=lambda x: -x["nota"]):
+        if it["oid"] in cache:
+            it["conhecido"] = cache[it["oid"]]
+        elif it["nota"] < corte:
+            it["conhecido"] = "TNS não consultado (nota baixa)"
+        else:
+            it["conhecido"] = avaliacao.situacao_tns(tns, it["ra"], it["dec"])
+            if it["conhecido"].startswith("TNS:"):
+                cache[it["oid"]] = it["conhecido"]
+    gravar_json(caminho, cache)
+
+
+def rodar_ztf(dias: float, prob: float, tns: dict[str, Any] | None, pasta: str = PASTA) -> list[dict[str, Any]]:
     objs = avaliacao.candidatos(dias, prob)
     with ThreadPoolExecutor(6) as ex:
-        itens = [r for r in ex.map(lambda o: _seguro(o, tns), objs) if r]
+        itens = [r for r in ex.map(lambda o: _seguro(o, None), objs) if r]
     for i in itens:
         i.setdefault("fonte", "ztf")
     for it in sorted(itens, key=lambda x: -x["nota"])[:TOP_CONFERIR]:
         avaliacao.conferir_conhecidos(it)
+    tns_com_cache(itens, tns, pasta, CORTE_TNS)
     return itens
 
 
@@ -92,7 +114,7 @@ def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tu
     tns = catalogos.tns_carregar(pasta)
     itens: list[dict[str, Any]] = []
     if "ztf" in fontes:
-        itens += rodar_ztf(dias, prob, tns)
+        itens += rodar_ztf(dias, prob, tns, pasta)
     if "rubin" in fontes:
         vigiar_fluxo_rubin(pasta)
         itens += rodar_rubin(dias, tns)
@@ -141,7 +163,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="cacasn", description="Caçador de supernovas nos alertas do ZTF (ALeRCE) e do Rubin (Fink)."
     )
-    ap.add_argument("--dias", type=float, default=3, help="primeira detecção há no máximo N dias")
+    ap.add_argument(
+        "--dias",
+        type=float,
+        default=21,
+        help="primeira detecção há no máximo N dias (a nota sobe com as noites: os 2 de out/2026 tinham 16-20 dias)",
+    )
     ap.add_argument("--prob", type=float, default=0.5, help="ZTF: probabilidade mínima de SN no stamp classifier")
     ap.add_argument("--fonte", choices=(*FONTES, "ambas"), default="ambas", help="de onde buscar os alertas")
     ap.add_argument(
