@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from . import acompanhamento, alertas, avaliacao, catalogos, curva, registro, rubin
+from . import acompanhamento, alertas, avaliacao, catalogos, curva, novidades, registro, rubin
 from .rascunho import rascunho
 from .rede import gravar_json, gravar_texto, ler_json
 from .relatorio import relatorio
@@ -137,6 +137,8 @@ def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tu
     if avisar:
         alertas.avisar_novos(itens, pasta)
     acompanhamento.verificar(tns, pasta)
+    vistos = {str(i["oid"]).replace("LSST ", "") for i in itens} | set(ler_json(os.path.join(pasta, "tns_cache.json"), {}))
+    novidades.verificar(tns, pasta, vistos)
     return itens
 
 

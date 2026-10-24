@@ -102,6 +102,14 @@ followed object from the TNS API and sends one notification when someone classif
 (e.g. "AT 2026agsv -> SN 2026agsv = SN Ia (z = 0.05)") — the same news as the AstroNotes emails,
 without needing the mailbox.
 
+## TNS news without the mailbox
+
+Every run also downloads TNS's daily change file (`tns_public_objects_YYYYMMDD.csv.zip`, with your
+bot) for each closed day since the last check, appends a summary to `novidades.md` (new transients,
+every spectroscopic classification with type and redshift) and notifies only what matters: a
+classification of an object CacaSN had seen, or a rare type (SLSN, TDE, kilonova, Ibn, IIn…). On
+2026-10-21..23 that was 330 new transients and 11 classifications, with two highlights.
+
 ## Development
 
     uv sync --all-extras

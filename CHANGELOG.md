@@ -2,6 +2,12 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.0] - 2026-10-24
+
+### Adicionado
+- Novidades do TNS sem email: arquivo diário de mudanças do TNS, resumo em `novidades.md` e aviso quando
+  um candidato visto pelo CacaSN é classificado ou aparece um tipo raro.
+
 ## [0.6.0] - 2026-10-24
 
 ### Adicionado
