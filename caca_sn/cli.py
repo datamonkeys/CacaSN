@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from . import alertas, avaliacao, catalogos, curva, registro, rubin
+from . import acompanhamento, alertas, avaliacao, catalogos, curva, registro, rubin
 from .rascunho import rascunho
 from .rede import gravar_json, gravar_texto, ler_json
 from .relatorio import relatorio
@@ -136,6 +136,7 @@ def rodar(dias: float, prob: float, avisar: bool, pasta: str = PASTA, fontes: tu
         )
     if avisar:
         alertas.avisar_novos(itens, pasta)
+    acompanhamento.verificar(tns, pasta)
     return itens
 
 
@@ -176,10 +177,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=f"avisa candidato fora do TNS (ZTF: nota >= {alertas.AVISO}; Rubin: >= {rubin.AVISO})",
     )
+    ap.add_argument(
+        "--acompanhar", metavar="NOME", help="passa a acompanhar um objeto do TNS (ex.: 2026agsv) e avisa quando for classificado"
+    )
     ap.add_argument("--rascunho", metavar="OID", help="gera o relatório para o TNS de um candidato da última rodada (não envia)")
     args = ap.parse_args(argv)
     if args.rascunho:
         return gerar_rascunho(args.rascunho)
+    if args.acompanhar:
+        acompanhamento.adicionar(PASTA, args.acompanhar)
+        acompanhamento.verificar(catalogos.tns_carregar(PASTA), PASTA)
+        print(acompanhamento.ler_json(os.path.join(PASTA, acompanhamento.ARQUIVO), {}))
+        return 0
     registro.configurar(os.path.join(PASTA, "cacasn.log"))
     fontes = FONTES if args.fonte == "ambas" else (args.fonte,)
     try:

@@ -9,8 +9,8 @@ nobody has reported yet. *Português abaixo.*
 ## Install and run
 
     uv sync                         # or: pip install .
-    uv run cacasn                   # candidates first detected in the last 3 days
-    uv run cacasn --dias 1          # only the freshest
+    uv run cacasn                   # candidates first detected in the last 21 days
+    uv run cacasn --dias 3          # only the freshest
     uv run cacasn --avisar          # alert for an unreported candidate with score >= 18
     open report.html
 
@@ -94,6 +94,13 @@ TNS IDs of the data source, camera and filters (read from objects already on TNS
 inferred). It never sends anything: add `reporter` and `reporting_groupid` to `tns.json`, try it on
 https://sandbox.wis-tns.org, then submit on TNS. Professional bots report clear ZTF supernovae within
 hours, so speed matters: schedule `--avisar` every few hours.
+
+## Following your discoveries
+
+`cacasn --acompanhar 2026agsv` adds a TNS object to `acompanhar.json`. Every run then reads each
+followed object from the TNS API and sends one notification when someone classifies it by spectrum
+(e.g. "AT 2026agsv -> SN 2026agsv = SN Ia (z = 0.05)") — the same news as the AstroNotes emails,
+without needing the mailbox.
 
 ## Development
 

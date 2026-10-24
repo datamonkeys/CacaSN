@@ -2,6 +2,18 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.0] - 2026-10-24
+
+### Adicionado
+- `--acompanhar NOME`: acompanha objetos do TNS e avisa quando forem classificados (lido da API, sem email).
+- Cache do TNS (`tns_cache.json`) para objetos já reportados.
+
+### Mudado
+- Janela padrão de 21 dias (os dois objetos descobertos em 24/10/2026, AT 2026agsv e AT 2026agsw, tinham
+  16–20 dias quando a nota ficou alta).
+- No ZTF o TNS só é consultado de nota 15 para cima (no teste de 30 dias todos os alarmes estavam acima).
+- Disjuntor para o VizieR fora do ar.
+
 ## [0.5.0] - 2026-10-23
 
 ### Adicionado
