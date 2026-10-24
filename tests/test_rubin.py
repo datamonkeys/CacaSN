@@ -118,6 +118,27 @@ class TesteBusca(unittest.TestCase):
         self.assertEqual(sorted(a["r:diaSourceId"] for a in als), [1, 2])  # o mesmo alerta em várias categorias conta uma vez
 
 
+class TesteCurvaCompleta(unittest.TestCase):
+    def test_converte_e_ordena(self):
+        from unittest import mock
+
+        fontes = [
+            {"r:midpointMjdTai": 61231.0, "r:band": "r", "r:psfFlux": 10000.0},
+            {"r:midpointMjdTai": 61230.0, "r:band": "g", "r:psfFlux": 20000.0},
+            {"r:midpointMjdTai": 61232.0, "r:band": "g", "r:psfFlux": -5.0},
+        ]
+        with mock.patch.object(rubin, "get_json", return_value=fontes):
+            t0, curva = rubin.curva_completa(1)
+        self.assertEqual(t0, 61230.0)
+        self.assertEqual([c[:2] for c in curva], [(0.0, 1), (1.0, 2)])  # fluxo negativo fica de fora
+
+    def test_falha_vira_none(self):
+        from unittest import mock
+
+        with mock.patch.object(rubin, "get_json", side_effect=OSError()):
+            self.assertIsNone(rubin.curva_completa(1))
+
+
 class TesteCorte(unittest.TestCase):
     def test_corte_por_fonte(self):
         self.assertEqual(alertas.corte({"fonte": "rubin"}), rubin.AVISO)

@@ -148,8 +148,9 @@ def avaliar(obj: dict[str, Any], tns: dict[str, Any] | None) -> dict[str, Any] |
     if com_stamp:
         c = com_stamp[0]["candid"]
         stamps = {t: f"{STAMP}?oid={oid}&candid={c}&type={t}&format=png" for t in ("science", "template", "difference")}
-    curva = [(round(d["mjd"] - mags[0]["mjd"], 2), d["fid"], round(d["magpsf"], 2)) for d in mags]
+    curva = [(round(d["mjd"] - mags[0]["mjd"], 4), d["fid"], round(d["magpsf"], 2)) for d in mags]
     return dict(
+        mjd0=mags[0]["mjd"],
         oid=oid,
         ra=ra,
         dec=dec,

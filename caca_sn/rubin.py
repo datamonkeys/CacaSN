@@ -143,12 +143,13 @@ def objeto(oid: Any, als: list[dict[str, Any]]) -> dict[str, Any]:
     tns = next((texto(a.get("f:xm_tns_fullname")) for a in als if texto(a.get("f:xm_tns_fullname"))), None)
     fid = {"u": 0, "g": 1, "r": 2, "i": 3, "z": 4, "y": 5}
     curva = [
-        (round(num(a["r:midpointMjdTai"]) - num(als[0]["r:midpointMjdTai"]), 2), fid.get(str(a.get("r:band")), 9), round(m, 2))
+        (round(num(a["r:midpointMjdTai"]) - num(als[0]["r:midpointMjdTai"]), 4), fid.get(str(a.get("r:band")), 9), round(m, 2))
         for a in als
         if (m := mag_ab(num(a.get("r:psfFlux")))) is not None
     ]
     sid = ultimo["r:diaSourceId"]
     return dict(
+        mjd0=num(als[0]["r:midpointMjdTai"]),
         oid=f"LSST {oid}",
         ra=num(ultimo["r:ra"]),
         dec=num(ultimo["r:dec"]),
@@ -167,6 +168,26 @@ def objeto(oid: Any, als: list[dict[str, Any]]) -> dict[str, Any]:
         mag=mag_ab(max(num(a.get("r:psfFlux")) for a in als)) or 99.0,
         link=f"https://lsst.fink-portal.org/{oid}",
     )
+
+
+def curva_completa(oid: Any) -> tuple[float, list[tuple[float, int, float]]] | None:
+    """Todas as detecções do objeto no Fink (a categoria só traz o alerta que a disparou).
+    Devolve (MJD da primeira detecção positiva, curva) ou None."""
+    q = urllib.parse.urlencode({"diaObjectId": oid, "columns": "r:midpointMjdTai,r:band,r:psfFlux"})
+    try:
+        fontes = get_json(f"{API}/sources?{q}") or []
+    except Exception:
+        return None
+    fid = {"u": 0, "g": 1, "r": 2, "i": 3, "z": 4, "y": 5}
+    pontos = sorted(
+        (num(s["r:midpointMjdTai"]), fid.get(str(s.get("r:band")), 9), m)
+        for s in fontes
+        if (m := mag_ab(num(s.get("r:psfFlux")))) is not None
+    )
+    if not pontos:
+        return None
+    t0 = pontos[0][0]
+    return t0, [(round(t - t0, 4), f, round(m, 2)) for t, f, m in pontos]
 
 
 def ultima_noite() -> str | None:
