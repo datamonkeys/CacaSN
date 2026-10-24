@@ -23,6 +23,31 @@ class TesteGaia(unittest.TestCase):
             self.assertIs(catalogos.estrela_gaia(1, 2), catalogos.SEM_RESPOSTA)
 
 
+class TesteDisjuntor(unittest.TestCase):
+    def setUp(self):
+        catalogos.VIZIER.falhas = 0
+
+    def tearDown(self):
+        catalogos.VIZIER.falhas = 0
+
+    def test_abre_depois_de_falhas_seguidas(self):
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=OSError("fora")) as abre,
+            mock.patch.object(catalogos.time, "sleep"),
+        ):
+            for _ in range(5):
+                self.assertIsNone(catalogos.vizier("X", 1, 2, 1, "a"))
+        self.assertEqual(abre.call_count, 3 * catalogos.VIZIER.limite)  # depois de aberto, nem tenta
+        self.assertTrue(catalogos.VIZIER.aberto)
+
+    def test_resposta_boa_zera(self):
+        catalogos.VIZIER.resultado(False)
+        catalogos.VIZIER.resultado(False)
+        catalogos.VIZIER.resultado(True)
+        self.assertFalse(catalogos.VIZIER.aberto)
+        self.assertEqual(catalogos.VIZIER.falhas, 0)
+
+
 class TesteVSX(unittest.TestCase):
     def test_variavel_conhecida(self):
         with mock.patch.object(catalogos, "vizier", return_value=[["ASASSN-26de   ", "UG  "]]):

@@ -16,8 +16,31 @@ from .rede import HDR, ler_json
 SEM_RESPOSTA = object()  # o catálogo falhou: não dá para afirmar nada
 
 
+class Disjuntor:
+    """Depois de `limite` falhas seguidas, desiste na hora até a próxima resposta boa
+    (ou a próxima rodada). Sem isso, um VizieR fora do ar custa ~90 s por candidato."""
+
+    def __init__(self, limite: int = 3) -> None:
+        self.limite = limite
+        self.falhas = 0
+        self._trava = threading.Lock()
+
+    @property
+    def aberto(self) -> bool:
+        return self.falhas >= self.limite
+
+    def resultado(self, ok: bool) -> None:
+        with self._trava:
+            self.falhas = 0 if ok else self.falhas + 1
+
+
+VIZIER = Disjuntor()
+
+
 def vizier(fonte: str, ra: float, dec: float, raio: float, cols: str) -> list[list[str]] | None:
     """Linhas do catálogo perto da posição, ou None se o VizieR não respondeu."""
+    if VIZIER.aberto:
+        return None
     url = (
         f"https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source={fonte}&-c={ra:.6f}%20{dec:+.6f}"
         f"&-c.rs={raio}&-out={cols}&-out.max=5&-sort=_r"
@@ -26,9 +49,12 @@ def vizier(fonte: str, ra: float, dec: float, raio: float, cols: str) -> list[li
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=30) as r:
                 linhas = [l.split("\t") for l in r.read().decode().splitlines() if l and not l.startswith("#")]
+            VIZIER.resultado(True)
             return [l for l in linhas[3:] if len(l) == len(cols.split(","))]
         except Exception:
-            time.sleep(2**i)
+            if i < 2:
+                time.sleep(2**i)
+    VIZIER.resultado(False)
     return None
 
 
