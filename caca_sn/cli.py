@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from . import acompanhamento, alertas, avaliacao, catalogos, curva, novidades, registro, rubin, tns_local
+from . import acompanhamento, alertas, avaliacao, catalogos, curva, novas_anas, novidades, registro, rubin, tns_local
 from .rascunho import rascunho
 from .rede import gravar_json, gravar_texto, ler_json
 from .relatorio import relatorio
@@ -174,19 +174,32 @@ def rodar(
     acompanhamento.verificar(tns, pasta)
     vistos = {str(i["oid"]).replace("LSST ", "") for i in itens} | set(ler_json(os.path.join(pasta, "tns_cache.json"), {}))
     novidades.verificar(tns, pasta, vistos, buscar_hoje=novidades.buscar_modificados)
+    if avisar:  # no agendamento (a cada 3 h) caça também novas anãs
+        try:
+            novas_anas.rodar(pasta, avisar=True, cfg=tns)
+        except Exception as e:  # falha aqui não derruba a rodada de supernovas
+            log.error("novas_anas_falhou", erro=repr(e))
     return itens
 
 
 def gerar_rascunho(oid: str, pasta: str = PASTA) -> int:
     """Escreve rascunhos/<oid>.json para revisar e enviar pelo site do TNS."""
     itens = ler_json(os.path.join(pasta, "resultados.json"), [])
-    it = next((i for i in itens if i["oid"] == oid or i["oid"] == f"LSST {oid}"), None)
+    it: dict[str, Any] | None = next((i for i in itens if i["oid"] == oid or i["oid"] == f"LSST {oid}"), None)
+    anas = ler_json(os.path.join(pasta, novas_anas.SAIDA_JSON), [])
+    ana: dict[str, Any] | None = next((i for i in anas if i["oid"] == oid), None)
     if it is None:
-        print(f"{oid} não está no último resultados.json")
-        return 1
-    if not it["conhecido"].startswith("NÃO"):
-        print(f"atenção: {it['conhecido']}")
-    relatorio, pendencias = rascunho(it, catalogos.tns_carregar(pasta))
+        if ana is None:
+            print(f"{oid} não está no último resultados.json nem em {novas_anas.SAIDA_JSON}")
+            return 1
+        it = ana
+        if it.get("suspeito"):
+            print(f"atenção: {it['suspeito']}")
+        relatorio, pendencias = novas_anas.rascunho_nova_ana(it, catalogos.tns_carregar(pasta))
+    else:
+        if not it["conhecido"].startswith("NÃO"):
+            print(f"atenção: {it['conhecido']}")
+        relatorio, pendencias = rascunho(it, catalogos.tns_carregar(pasta))
     os.makedirs(os.path.join(pasta, "rascunhos"), exist_ok=True)
     destino = os.path.join(pasta, "rascunhos", f"{it['oid'].replace(' ', '_')}.json")
     gravar_json(destino, relatorio, indent=2, ensure_ascii=False)
@@ -225,6 +238,11 @@ def main(argv: list[str] | None = None) -> int:
         "--acompanhar", metavar="NOME", help="passa a acompanhar um objeto do TNS (ex.: 2026agsv) e avisa quando for classificado"
     )
     ap.add_argument("--rascunho", metavar="OID", help="gera o relatório para o TNS de um candidato da última rodada (não envia)")
+    ap.add_argument(
+        "--novas-anas",
+        action="store_true",
+        help="só caça novas anãs em erupção (CV/Nova da ALeRCE fora do TNS e do VSX); grava novas_anas.html",
+    )
     args = ap.parse_args(argv)
     if args.rascunho:
         return gerar_rascunho(args.rascunho)
@@ -234,6 +252,11 @@ def main(argv: list[str] | None = None) -> int:
         print(acompanhamento.ler_json(os.path.join(PASTA, acompanhamento.ARQUIVO), {}))
         return 0
     registro.configurar(os.path.join(PASTA, "cacasn.log"))
+    if args.novas_anas:
+        aprovadas = novas_anas.rodar(PASTA, avisar=args.avisar)
+        print(f"{len(aprovadas)} nova(s) anã(s)")
+        print(os.path.join(PASTA, novas_anas.SAIDA_HTML))
+        return 0
     fontes = FONTES if args.fonte == "ambas" else (args.fonte,)
     try:
         rodar(args.dias, args.prob, args.avisar, fontes=fontes, a_partir=args.a_partir)

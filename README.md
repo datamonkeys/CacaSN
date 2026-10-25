@@ -117,6 +117,17 @@ classified since the previous run (`public_timestamp`): news reaches you within 
 object is never notified twice. On
 2026-10-21..23 that was 330 new transients and 11 classifications, with two highlights.
 
+## Dwarf novae
+
+`cacasn --novas-anas` (and every `--avisar` run) hunts dwarf novae in outburst: ALeRCE light-curve
+classifier CV/Nova candidates from the last 60 days, minus what is already in the TNS (local index, 3")
+and in the VSX (one batch CDS X-Match, 5"). Each one left is measured from its ALeRCE light curve and
+passes with >= 90% positive detections, amplitude >= 2 mag, >= 4 detections, <= 40 days and g-r <= 1.
+A bright Gaia DR3 source within 1" flags it as "suspect". Output: `novas_anas.json` and
+`novas_anas.html`; each object is notified once. If the X-Match fails, that run alerts nothing.
+`--rascunho OID` also writes a TNS draft ("likely dwarf nova outburst"; pick type "Other" on the site).
+Found 3 new ones on 2026-10-25 (AT 2026agtu/agtv/agtw).
+
 ## Development
 
     uv sync --all-extras
@@ -138,6 +149,8 @@ Caçador de supernovas nos alertas públicos do ZTF via ALeRCE, conferindo no TN
 reportado. Só biblioteca padrão do Python; o aviso usa notificação do macOS (em outros sistemas, imprime).
 
 - `uv run cacasn [--dias 3] [--prob 0.5] [--avisar]` (ou `python3 cacasn.py`) gera `report.html`.
+- `uv run cacasn --novas-anas` caça novas anãs em erupção (CV/Nova da ALeRCE fora do TNS e do VSX) e gera
+  `novas_anas.html`; com `--avisar` isso roda junto a cada 3 h e avisa cada uma só uma vez.
 - Para consultar e reportar no TNS: crie conta e um bot; use as variáveis do `.env.example` ou `tns.json`.
 - Quem reporta primeiro ao TNS fica como descobridor. Os robôs profissionais reportam as supernovas
   claras do ZTF em horas — a chance está em rodar com frequência e julgar os recortes.

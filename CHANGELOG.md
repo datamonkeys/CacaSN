@@ -2,6 +2,17 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.10.0] - 2026-10-25
+
+### Adicionado
+- Caçador de novas anãs (`--novas-anas`, e também em toda rodada com `--avisar`): candidatos CV/Nova dos
+  classificadores de curva da ALeRCE (60 dias), fora do TNS (índice local, 3") e do VSX (um único
+  cruzamento em lote no CDS X-Match, 5"); aprova quem tem >= 90% de detecções positivas, amplitude >= 2 mag,
+  >= 4 detecções, duração <= 40 dias e g-r <= 1. Fonte Gaia DR3 brilhante a 1" marca "suspeito".
+  Grava `novas_anas.json` e `novas_anas.html`, avisa uma vez por objeto (`novas_anas_estado.json`) e
+  `--rascunho OID` também gera o rascunho do TNS com "likely dwarf nova outburst". Se o X-Match falhar,
+  a rodada não avisa nada. O método achou 3 inéditas em 25/10/2026 (AT 2026agtu/agtv/agtw).
+
 ## [0.9.1] - 2026-10-24
 
 ### Corrigido
